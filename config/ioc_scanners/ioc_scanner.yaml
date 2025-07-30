@@ -1,0 +1,3 @@
+ioc_json: "rules/ioc/indicators.json"
+ioc_csv: "rules/ioc/indicators.csv"
+artifacts_dir: "artifacts" 

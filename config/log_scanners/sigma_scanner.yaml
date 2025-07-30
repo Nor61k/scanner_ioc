@@ -1,0 +1,4 @@
+rules_path: "rules/sigma/"
+log_paths:
+  - "C:\\Windows\\System32\\winevt\\Logs"
+artifacts_dir: "artifacts" 

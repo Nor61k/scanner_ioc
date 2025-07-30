@@ -1,0 +1,19 @@
+psutil
+pefile
+yara-python
+pyyaml
+requests
+cryptography
+# Для работы с csv, json, pathlib, datetime используются стандартные библиотеки Python 
+# Для SigmaScanner:
+# sigma
+# Для RegistryScanner (offline):
+# python-registry
+# Для интеграций TI:
+# pymisp
+# OTXv2
+# vt-py
+# threatconnect 
+python-magic
+python-magic-bin; sys_platform == "win32" 
+tqdm 

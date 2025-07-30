@@ -1,0 +1,124 @@
+# Конфигурация менеджера сканирования
+
+# Общие настройки
+general:
+  enabled: true
+  log_level: INFO
+  parallel_scans: true  # Параллельное выполнение сканеров
+  max_workers: 4        # Максимальное количество параллельных сканеров
+
+# Настройки сканеров
+scanners:
+  network_scanner:
+    enabled: true
+    priority: 1
+    config_file: "config/network_scanners/network_scanner.yaml"
+    
+  sigma_scanner:
+    enabled: false
+    priority: 2
+    config_file: "config/log_scanners/sigma_scanner.yaml"
+    
+  system_scanner:
+    enabled: true
+    priority: 4
+    config_file: "config/system_scanners/system_scanner.yaml"
+    
+  ioc_scanner:
+    enabled: true
+    priority: 5
+    config_file: "config/ioc_scanners/ioc_scanner.yaml"
+    
+  memory_scanner:
+    enabled: true
+    priority: 6
+    config_file: "config/memory_scanners/memory_scanner.yaml"
+    memory_rules_dir: rules/memory
+
+  yara_scanner:
+    enabled: true
+    priority: 3
+    config_file: "config/file_scanners/yara_scanner.yaml"
+
+  registry_scanner:
+    enabled: true
+    priority: 7
+    config_file: "config/registry_scanners/registry_scanner.yaml"
+
+# Настройки отчетов
+reporting:
+  # Формат отчетов
+  formats:
+    - json     # Структурированные данные
+    - html     # Веб-отчет
+    - pdf      # PDF документ
+    - xlsx     # Excel таблица
+    
+  # Директория для сохранения отчетов
+  output_dir: "reports"
+  
+  # Шаблоны отчетов
+  templates_dir: "templates/reports"
+  
+  # Группировка результатов
+  group_by:
+    - severity
+    - scanner_type
+    - threat_type
+    
+  # Включаемые секции
+  sections:
+    - summary           # Общая сводка
+    - threats          # Обнаруженные угрозы
+    - system_info      # Информация о системе
+    - network_activity # Сетевая активность
+    - artifacts        # Собранные артефакты
+    - recommendations  # Рекомендации
+    
+  # Настройки визуализации
+  visualization:
+    enabled: true
+    charts:
+      - type: pie
+        title: "Распределение угроз по типам"
+      - type: bar
+        title: "Угрозы по уровню критичности"
+      - type: timeline
+        title: "Хронология обнаружений"
+
+# Интеграции
+integrations:
+  # Отправка уведомлений
+  notifications:
+    email:
+      enabled: true
+      smtp_server: "smtp.example.com"
+      smtp_port: 587
+      username: "user@example.com"
+      password: "password"
+      from_address: "jetcsirt@example.com"
+      to_addresses: []
+      
+    telegram:
+      enabled: false
+      bot_token: ""
+      chat_ids: []
+      
+  # Экспорт результатов
+  export:
+    elasticsearch:
+      enabled: true
+      hosts: ["http://localhost:9200"]
+      index: "jetcsirt-results"
+      
+    splunk:
+      enabled: true
+      host: "localhost"
+      port: 8089
+      token: ""
+      index: "jetcsirt"
+      
+    misp:
+      enabled: false
+      url: ""
+      api_key: "" 
