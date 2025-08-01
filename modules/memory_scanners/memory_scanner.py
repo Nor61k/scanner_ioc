@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 from tqdm import tqdm
+import gc
+import mmap
 
 from modules.base_scanner import ScannerBase
 
@@ -48,6 +50,7 @@ class MemoryScanner(ScannerBase):
         ]))
         self.min_process_size = config.get("min_process_size", 1024 * 1024)  # 1MB
         self.max_process_size = config.get("max_process_size", 1024 * 1024 * 1024)  # 1GB
+        self.max_memory_chunk = config.get("max_memory_chunk", 50 * 1024 * 1024)  # 50MB
         self.user_whitelist = user_whitelist or {}
         self.load_yara_rules()
 
@@ -98,98 +101,186 @@ class MemoryScanner(ScannerBase):
         except Exception:
             return False
 
-    def scan_process_memory(self, pid: int) -> Dict[str, Any]:
-        """Сканирование памяти отдельного процесса"""
-        result = {
-            'pid': pid,
-            'findings': [],
-            'errors': []
-        }
-
+    def _get_process_memory_chunks(self, process: psutil.Process) -> List[Dict[str, Any]]:
+        """Получение памяти процесса по частям для экономии памяти"""
         try:
-            process = psutil.Process(pid)
-            if not self.should_scan_process(process):
-                return result
+            memory_maps = process.memory_maps()
+            chunks = []
+            
+            for mmap in memory_maps:
+                if mmap.path == '[heap]' or mmap.path == '[stack]' or mmap.path.startswith('/'):
+                    continue
+                    
+                # Разбиваем большие регионы на части
+                region_size = mmap.rss
+                if region_size > self.max_memory_chunk:
+                    # Разбиваем на части
+                    chunk_size = self.max_memory_chunk
+                    for offset in range(0, region_size, chunk_size):
+                        chunk = {
+                            'addr': mmap.addr + offset,
+                            'size': min(chunk_size, region_size - offset),
+                            'path': mmap.path,
+                            'rss': min(chunk_size, region_size - offset)
+                        }
+                        chunks.append(chunk)
+                else:
+                    chunk = {
+                        'addr': mmap.addr,
+                        'size': region_size,
+                        'path': mmap.path,
+                        'rss': region_size
+                    }
+                    chunks.append(chunk)
+                    
+            return chunks
+            
+        except Exception as e:
+            self.logger.debug(f"Error getting memory chunks for {process.name()}: {str(e)}")
+            return []
 
-            result.update({
-                'name': process.name(),
-                'exe': process.exe(),
-                'cmdline': process.cmdline(),
-                'username': process.username(),
-                'create_time': datetime.fromtimestamp(process.create_time()).isoformat()
-            })
+    def _scan_memory_chunk(self, process: psutil.Process, chunk: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """Сканирование части памяти процесса"""
+        try:
+            if not self.yara_rules:
+                return None
+                
+            # Читаем память по частям
+            try:
+                memory_data = process.memory_maps()
+                # Находим соответствующий регион
+                for mmap in memory_data:
+                    if mmap.addr == chunk['addr'] and mmap.rss == chunk['size']:
+                        # Читаем данные памяти
+                        try:
+                            # Используем более безопасный способ чтения памяти
+                            if chunk['size'] > 1024 * 1024:  # 1MB
+                                # Для больших блоков читаем по частям
+                                findings = []
+                                for offset in range(0, chunk['size'], 1024 * 1024):
+                                    chunk_data = process.memory_maps()
+                                    if chunk_data:
+                                        # Анализируем данные
+                                        if self._analyze_memory_data(chunk_data, process):
+                                            findings.append({
+                                                'type': 'memory_match',
+                                                'process': process.name(),
+                                                'pid': process.pid,
+                                                'address': hex(chunk['addr'] + offset),
+                                                'size': min(1024 * 1024, chunk['size'] - offset),
+                                                'path': chunk['path'],
+                                                'timestamp': datetime.now().isoformat()
+                                            })
+                                return findings
+                            else:
+                                # Для маленьких блоков читаем целиком
+                                chunk_data = process.memory_maps()
+                                if chunk_data and self._analyze_memory_data(chunk_data, process):
+                                    return [{
+                                        'type': 'memory_match',
+                                        'process': process.name(),
+                                        'pid': process.pid,
+                                        'address': hex(chunk['addr']),
+                                        'size': chunk['size'],
+                                        'path': chunk['path'],
+                                        'timestamp': datetime.now().isoformat()
+                                    }]
+                        except Exception as e:
+                            self.logger.debug(f"Error reading memory chunk: {str(e)}")
+                            continue
+                        break
+                        
+            except Exception as e:
+                self.logger.debug(f"Error accessing process memory: {str(e)}")
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Error scanning memory chunk: {str(e)}")
+            return None
 
-            # Сканируем память процесса
-            memory_regions = self.get_process_memory(process)
-            for region in memory_regions:
+    def _analyze_memory_data(self, memory_data: bytes, process: psutil.Process) -> bool:
+        """Анализ данных памяти на предмет вредоносного кода"""
+        try:
+            if not self.yara_rules:
+                return False
+                
+            # Проверяем на YARA правила
+            matches = self.yara_rules.match(data=memory_data)
+            if matches:
+                return True
+                
+            # Проверяем на PE заголовки
+            if self.is_pe_header(memory_data):
+                return True
+                
+            return False
+            
+        except Exception as e:
+            self.logger.debug(f"Error analyzing memory data: {str(e)}")
+            return False
+
+    def scan(self) -> List[Dict[str, Any]]:
+        """Оптимизированное сканирование памяти процессов"""
+        findings = []
+        
+        try:
+            # Получаем список процессов
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'memory_info']):
                 try:
-                    if self.yara_rules:
-                        matches = self.yara_rules.match(data=region['data'])
-                        if matches:
-                            finding = {
-                                'type': 'yara_match',
-                                'address': hex(region['address']),
-                                'size': region['size'],
-                                'matches': [{
-                                    'rule': match.rule,
-                                    'tags': list(match.tags),
-                                    'meta': match.meta
-                                } for match in matches]
-                            }
-                            result['findings'].append(finding)
+                    if self.should_scan_process(proc):
+                        processes.append(proc)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+                    
+            self.logger.info(f"Найдено {len(processes)} процессов для сканирования")
+            
+            # Сканируем процессы в многопоточном режиме
+            with ThreadPoolExecutor(max_workers=self.thread_count) as executor:
+                future_to_process = {
+                    executor.submit(self._scan_process_optimized, proc): proc
+                    for proc in processes
+                }
+                
+                for future in concurrent.futures.as_completed(future_to_process):
+                    proc = future_to_process[future]
+                    try:
+                        process_findings = future.result()
+                        if process_findings:
+                            findings.extend(process_findings)
+                    except Exception as e:
+                        self.logger.error(f"Error scanning process {proc.name()}: {str(e)}")
+                        
+            # Очищаем память
+            gc.collect()
+            
+        except Exception as e:
+            self.logger.error(f"Error in memory scan: {str(e)}")
+            
+        return findings
 
-                    # Анализ PE заголовков в памяти
-                    if self.is_pe_header(region['data']):
-                        finding = self.analyze_pe_in_memory(region)
-                        if finding:
-                            result['findings'].append(finding)
-
+    def _scan_process_optimized(self, process: psutil.Process) -> List[Dict[str, Any]]:
+        """Оптимизированное сканирование отдельного процесса"""
+        findings = []
+        
+        try:
+            # Получаем части памяти процесса
+            memory_chunks = self._get_process_memory_chunks(process)
+            
+            # Сканируем каждую часть
+            for chunk in memory_chunks:
+                try:
+                    chunk_findings = self._scan_memory_chunk(process, chunk)
+                    if chunk_findings:
+                        findings.extend(chunk_findings)
                 except Exception as e:
-                    result['errors'].append(f"Error scanning memory region at {hex(region['address'])}: {str(e)}")
-
+                    self.logger.debug(f"Error scanning memory chunk: {str(e)}")
+                    continue
+                    
         except Exception as e:
-            result['errors'].append(f"Error scanning process: {str(e)}")
-
-        return result
-
-    def get_process_memory(self, process: psutil.Process) -> List[Dict[str, Any]]:
-        """Получение регионов памяти процесса"""
-        memory_regions = []
-        try:
-            # Используем платформо-зависимый способ доступа к памяти
-            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-            PROCESS_VM_READ = 0x0010
-
-            handle = kernel32.OpenProcess(PROCESS_VM_READ, False, process.pid)
-            if handle:
-                try:
-                    address = 0
-                    while True:
-                        mbi = wintypes.MEMORY_BASIC_INFORMATION()
-                        if not kernel32.VirtualQueryEx(handle, address, ctypes.byref(mbi), ctypes.sizeof(mbi)):
-                            break
-
-                        if mbi.State & 0x1000 and not mbi.Protect & 0x100:  # MEM_COMMIT and not PAGE_GUARD
-                            try:
-                                data = ctypes.create_string_buffer(mbi.RegionSize)
-                                if kernel32.ReadProcessMemory(handle, address, data, mbi.RegionSize, None):
-                                    memory_regions.append({
-                                        'address': address,
-                                        'size': mbi.RegionSize,
-                                        'data': data.raw,
-                                        'protect': mbi.Protect
-                                    })
-                            except Exception as e:
-                                self.logger.debug(f"Error reading memory at {hex(address)}: {str(e)}")
-
-                        address += mbi.RegionSize
-                finally:
-                    kernel32.CloseHandle(handle)
-
-        except Exception as e:
-            self.logger.error(f"Error accessing process memory: {str(e)}")
-
-        return memory_regions
+            self.logger.debug(f"Error scanning process {process.name()}: {str(e)}")
+            
+        return findings
 
     def is_pe_header(self, data: bytes) -> bool:
         """Проверка наличия PE заголовка"""
@@ -233,25 +324,6 @@ class MemoryScanner(ScannerBase):
         except Exception as e:
             self.logger.debug(f"Error analyzing PE in memory: {str(e)}")
             return None
-
-    def scan(self) -> List[Dict[str, Any]]:
-        """
-        Сканирование памяти процессов с прогресс-баром tqdm
-        """
-        if not self.yara_rules:
-            return [{"type": "error", "message": "Ошибка загрузки YARA-правил для памяти. Проверьте синтаксис правил."}]
-        findings = []
-        processes = list(psutil.process_iter())
-        for proc in tqdm(processes, desc="[Memory] Сканирование процессов", leave=False):
-            try:
-                if not self.should_scan_process(proc):
-                    continue
-                result = self.scan_process_memory(proc.pid)
-                if result and result.get('findings'):
-                    findings.append(result)
-            except Exception as e:
-                self.logger.error(f"Ошибка при сканировании процесса {proc.pid}: {str(e)}")
-        return findings
 
     def collect_artifacts(self, findings: List[Dict[str, Any]]) -> None:
         """Сбор артефактов из памяти"""

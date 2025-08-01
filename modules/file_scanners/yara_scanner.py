@@ -17,6 +17,9 @@ import time
 import re
 from tqdm import tqdm
 import threading
+from functools import lru_cache
+import mmap
+import psutil
 
 from modules.base_scanner import ScannerBase
 
@@ -105,17 +108,19 @@ class YaraScanner(ScannerBase):
     def __init__(self, config: Dict[str, Any], artifact_collector=None, user_whitelist: Dict[str, Any] = None):
         super().__init__("yara_scanner", config, artifact_collector)
         self.logger = logging.getLogger("JetCSIRT.YaraScanner")
-        self.rules = None
-        self.rules_path = None
-        self.file_cache = {}  # Кэш для хешей файлов
+        self.yara_rules = None
+        self.user_whitelist = user_whitelist or {}
         self.scan_stats = {
             'files_scanned': 0,
             'files_skipped': 0,
             'threats_found': 0,
             'scan_time': 0
         }
-        self.user_whitelist = user_whitelist or {}
-        self.artifacts_dir = Path(self.config.get("artifacts_dir", "artifacts"))
+        # Кэш для хешей файлов
+        self._file_hash_cache = {}
+        self._file_priority_cache = {}
+        self.thread_count = config.get("thread_count", multiprocessing.cpu_count())
+        self.max_ram = config.get("max_ram", None)
         self.load_yara_rules()
 
     def load_yara_rules(self) -> None:
@@ -144,8 +149,7 @@ class YaraScanner(ScannerBase):
                         self.logger.error(f"Ошибка компиляции правила {rule_file}: {str(e)}")
                 
                 if rules_dict:
-                    self.rules = yara.compile(filepaths=rules_dict)
-                    self.rules_path = str(rules_dir / "malware.yar")  # Путь для ProcessPoolExecutor
+                    self.yara_rules = yara.compile(filepaths=rules_dict)
                     msg = f"[YARA] Загружено {len(rules_dict)} YARA правил (.yar) из {rules_dir}"
                     print(msg)
                     self.logger.info(msg)
@@ -237,7 +241,7 @@ class YaraScanner(ScannerBase):
                 return False, "в user_whitelist.json"
             # Проверяем кэш
             file_hash = self.get_file_hash(file_path)
-            if file_hash in self.file_cache:
+            if file_hash in self._file_hash_cache:
                 return False, "файл уже сканирован"
                 
             # Проверяем расширение
@@ -271,6 +275,121 @@ class YaraScanner(ScannerBase):
         except:
             return ""
 
+    @lru_cache(maxsize=1000)
+    def _get_cached_file_priority(self, file_path: str) -> int:
+        """Кэшированная версия получения приоритета файла"""
+        return self.get_file_priority(file_path)
+
+    @lru_cache(maxsize=1000)
+    def _get_cached_suspicion_score(self, file_path: str) -> float:
+        """Кэшированная версия получения оценки подозрительности"""
+        return self.get_file_suspicion_score(file_path)
+
+    def _should_scan_file_optimized(self, file_path: str) -> bool:
+        """Оптимизированная проверка необходимости сканирования файла"""
+        try:
+            # Быстрая проверка существования и доступа
+            if not os.path.exists(file_path) or not os.access(file_path, os.R_OK):
+                return False
+
+            # Проверка размера файла
+            try:
+                size = os.path.getsize(file_path)
+                if size > self.config.get("max_file_size", 10 * 1024 * 1024):
+                    return False
+                if size == 0:
+                    return False
+            except (OSError, IOError):
+                return False
+
+            # Проверка расширения
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in LOW_PRIORITY_EXTENSIONS:
+                return False
+
+            # Проверка пути
+            file_path_lower = file_path.lower()
+            for skip_path in SKIP_PATHS:
+                if skip_path.lower() in file_path_lower:
+                    return False
+
+            return True
+        except Exception:
+            return False
+
+    def _scan_file_with_mmap(self, file_path: str) -> Optional[List[Dict[str, Any]]]:
+        """Сканирование файла с использованием memory mapping для больших файлов"""
+        try:
+            if not self.yara_rules:
+                return None
+
+            file_size = os.path.getsize(file_path)
+            
+            # Для маленьких файлов используем обычное сканирование
+            if file_size < 1024 * 1024:  # 1MB
+                matches = self.yara_rules.match(file_path)
+            else:
+                # Для больших файлов используем mmap
+                with open(file_path, 'rb') as f:
+                    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                        matches = self.yara_rules.match(data=mm)
+
+            if not matches:
+                return None
+
+            findings = []
+            for match in matches:
+                finding = {
+                    "type": "yara_match",
+                    "severity": match.meta.get("severity", "medium"),
+                    "file": file_path,
+                    "rule": match.rule,
+                    "tags": list(match.tags) if match.tags else [],
+                    "strings": [
+                        {
+                            "identifier": getattr(s, 'identifier', str(s)),
+                            "offset": getattr(s, 'offset', 0),
+                            "data": getattr(s, 'data', b'').hex() if hasattr(getattr(s, 'data', b''), 'hex') else str(getattr(s, 'data', b''))
+                        } for s in match.strings
+                    ],
+                    "meta": dict(match.meta) if match.meta else {},
+                    "timestamp": datetime.now().isoformat()
+                }
+                findings.append(finding)
+
+            return findings
+
+        except Exception as e:
+            if "could not open file" not in str(e).lower():
+                self.logger.debug(f"Error scanning {file_path}: {str(e)}")
+            return None
+
+    def _collect_files_optimized(self, scan_paths: List[str], exclude_paths: List[str]) -> List[str]:
+        """Оптимизированный сбор файлов для сканирования"""
+        all_files = []
+        
+        for scan_path in scan_paths:
+            if not os.path.exists(scan_path):
+                continue
+                
+            try:
+                for root, _, files in os.walk(scan_path):
+                    # Пропускаем исключенные пути
+                    if any(ex in root for ex in exclude_paths):
+                        continue
+                        
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        
+                        # Быстрая проверка
+                        if self._should_scan_file_optimized(file_path):
+                            all_files.append(file_path)
+                            
+            except Exception as e:
+                self.logger.error(f"Ошибка при обходе {scan_path}: {str(e)}")
+                
+        return all_files
+
     def scan_file_optimized(self, file_path: str) -> Optional[List[Dict[str, Any]]]:
         """
         Оптимизированное сканирование файла
@@ -283,14 +402,14 @@ class YaraScanner(ScannerBase):
                 return None
                 
             # Сканируем файл
-            if not self.rules:
+            if not self.yara_rules:
                 return None
                 
-            matches = self.rules.match(file_path)
+            matches = self.yara_rules.match(file_path)
             if matches:
                 # Кэшируем результат
                 file_hash = self.get_file_hash(file_path)
-                self.file_cache[file_hash] = True
+                self._file_hash_cache[file_hash] = True
                 
                 self.scan_stats['threats_found'] += 1
                 
@@ -333,9 +452,10 @@ class YaraScanner(ScannerBase):
 
     def scan(self, **kwargs) -> List[Dict[str, Any]]:
         """
-        Основной метод сканирования файлов с прогресс-баром tqdm
+        Оптимизированный метод сканирования файлов
         """
         findings = []
+        
         # Получаем настройки
         scan_paths = kwargs.get("scan_paths", self.config.get("scan_paths", ["C:\\Users"]))
         exclude_paths = kwargs.get("exclude_paths", []) + self.config.get("exclude_paths", []) + SKIP_PATHS
@@ -347,43 +467,11 @@ class YaraScanner(ScannerBase):
         
         start_time = datetime.now()
         
-        # Собираем все файлы для сканирования
-        all_files = []
-        for scan_path in scan_paths:
-            if (datetime.now() - start_time).total_seconds() > max_scan_time:
-                break
-                
-            self.logger.info(f"Сканируем директорию: {scan_path}")
-            
-            try:
-                for root, _, files in os.walk(scan_path):
-                    if (datetime.now() - start_time).total_seconds() > max_scan_time:
-                        break
-                        
-                    # Пропускаем исключенные пути
-                    if any(ex in root for ex in exclude_paths):
-                        continue
-                        
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        
-                        # Быстрая проверка
-                        should_scan, _ = self.should_scan_file(file_path)
-                        if should_scan:
-                            all_files.append(file_path)
-                            
-                        # Ограничиваем количество файлов
-                        # if len(all_files) >= 5000:
-                        #     break
-                            
-                    # if len(all_files) >= 5000:
-                    #     break
-                        
-            except Exception as e:
-                self.logger.error(f"Ошибка при обходе {scan_path}: {str(e)}")
-                
+        # Собираем файлы оптимизированным способом
+        all_files = self._collect_files_optimized(scan_paths, exclude_paths)
+        
         # Сортируем файлы по приоритету
-        file_priorities = [(f, self.get_file_priority(f) + self.get_file_suspicion_score(f)) for f in all_files]
+        file_priorities = [(f, self._get_cached_file_priority(f) + self._get_cached_suspicion_score(f)) for f in all_files]
         file_priorities.sort(key=lambda x: x[1], reverse=True)
         sorted_files = [f[0] for f in file_priorities]
         
@@ -394,14 +482,18 @@ class YaraScanner(ScannerBase):
         file_batches = [sorted_files[i:i + batch_size] for i in range(0, len(sorted_files), batch_size)]
         
         # Сканируем в многопоточном режиме
-        with ThreadPoolExecutor(max_workers=thread_count) as executor:
+        with ThreadPoolExecutor(max_workers=self.thread_count) as executor:
             future_to_batch = {
-                executor.submit(self.scan_files_batch, batch): i
+                executor.submit(self._scan_batch_optimized, batch): i
                 for i, batch in enumerate(file_batches)
             }
             
             for future in as_completed(future_to_batch):
                 batch_idx = future_to_batch[future]
+                # Проверка лимита RAM перед обработкой каждого батча
+                while not self._ram_within_limit():
+                    self.logger.warning("RAM limit reached, pausing batch processing")
+                    time.sleep(1)
                 try:
                     batch_findings = future.result()
                     if batch_findings:
@@ -424,13 +516,35 @@ class YaraScanner(ScannerBase):
         self.logger.info(f"Сканирование завершено за {scan_duration:.1f} сек")
         self.logger.info(f"Статистика: {self.scan_stats['files_scanned']} файлов, "
                         f"{self.scan_stats['files_skipped']} пропущено, "
-                        f"{self.scan_stats['threats_found']} угроз найдено")
+                        f"{len(findings)} угроз найдено")
         
         # После сбора findings фильтруем по user_whitelist
         if 'files' in self.user_whitelist:
             findings = [f for f in findings if f.get('file') not in self.user_whitelist['files']]
         
         return findings
+
+    def _scan_batch_optimized(self, files_batch: List[str]) -> List[Dict[str, Any]]:
+        """Оптимизированное сканирование батча файлов"""
+        findings = []
+        
+        for file_path in files_batch:
+            try:
+                file_findings = self._scan_file_with_mmap(file_path)
+                if file_findings:
+                    findings.extend(file_findings)
+                    self.scan_stats['threats_found'] += len(file_findings)
+            except Exception as e:
+                self.scan_stats['files_skipped'] += 1
+                continue
+                
+        return findings
+
+    def _ram_within_limit(self):
+        if self.max_ram is None:
+            return True
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss < self.max_ram
 
     def collect_artifacts(self, findings: List[Dict[str, Any]]) -> Dict[str, Path]:
         """

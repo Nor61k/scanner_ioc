@@ -149,6 +149,18 @@ def parse_args() -> argparse.Namespace:
         help="Имя сканера для запуска (например, memory_scanner)"
     )
     
+    parser.add_argument(
+        "--max-cpu",
+        type=int,
+        default=None,
+        help="Максимальное количество потоков/процессов для сканирования"
+    )
+    parser.add_argument(
+        "--max-ram",
+        type=int,
+        default=None,
+        help="Максимальный объем оперативной памяти (МБ), используемый сканером"
+    )
     return parser.parse_args()
 
 def run_scanner(args):
@@ -176,6 +188,14 @@ def main() -> int:
         logging.error("Failed to load configuration. Exiting.")
         return 1
         
+    # Передаем лимиты ресурсов в конфиг сканеров
+    if args.max_cpu:
+        for scanner_cfg in config.get('scanners', {}).values():
+            scanner_cfg['thread_count'] = args.max_cpu
+    if args.max_ram:
+        for scanner_cfg in config.get('scanners', {}).values():
+            scanner_cfg['max_ram'] = args.max_ram * 1024 * 1024  # в байтах
+
     # Если указан --scanner, запускаем только один сканер (старое поведение)
     if args.scanner:
         if args.scanner in config.get('scanners', {}):
@@ -232,7 +252,7 @@ def main() -> int:
             # Если запущено как exe, не добавляем __file__
             cmd = [sys.executable, '--scanner', scanner_name, '--config', args.config, '--output', args.output, '--logs', args.logs, '--case-id', args.case_id]
         else:
-        cmd = [sys.executable, __file__, '--scanner', scanner_name, '--config', args.config, '--output', args.output, '--logs', args.logs, '--case-id', args.case_id]
+            cmd = [sys.executable, __file__, '--scanner', scanner_name, '--config', args.config, '--output', args.output, '--logs', args.logs, '--case-id', args.case_id]
         if args.encryption_key:
             cmd += ['--encryption-key', args.encryption_key]
         p = subprocess.Popen(cmd)
