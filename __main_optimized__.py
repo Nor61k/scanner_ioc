@@ -287,14 +287,20 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         for scanner_name, data in findings_dict.items():
             findings_count = len(data.get('findings', []))
             artifacts_count = len(data.get('artifacts', {}))
-            status = "✅ Found" if findings_count > 0 else "✅ Clean"
+            
+            if findings_count > 0:
+                status = "🔴 Found"
+                status_class = "bg-danger"
+            else:
+                status = "🟢 Clean"
+                status_class = "bg-success"
             
             html_content += f"""
                                 <tr>
                                     <td><strong>{scanner_name}</strong></td>
                                     <td><span class="badge bg-primary">{findings_count}</span></td>
                                     <td><span class="badge bg-info">{artifacts_count}</span></td>
-                                    <td><span class="badge bg-success">{status}</span></td>
+                                    <td><span class="badge {status_class}">{status}</span></td>
                                 </tr>
             """
         
@@ -487,16 +493,25 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     """
                     
                 elif scanner_name == 'system_scanner':
-                    component = finding.get('component', 'Unknown')
-                    name = finding.get('name', 'Unknown')
-                    status = finding.get('status', 'Unknown')
-                    details = finding.get('details', '')
-                    risk_level = finding.get('risk_level', 'medium')
+                    # System scanner возвращает данные в формате {'type': '...', 'data': [...]}
+                    finding_type = finding.get('type', 'Unknown')
+                    data = finding.get('data', [])
+                    
+                    if isinstance(data, list):
+                        # Если data - это список, показываем количество элементов
+                        count = len(data)
+                        details = f"Found {count} items"
+                        risk_level = 'low' if count < 100 else 'medium' if count < 500 else 'high'
+                    else:
+                        # Если data - это словарь, показываем ключи
+                        count = len(data.keys()) if isinstance(data, dict) else 0
+                        details = f"Found {count} properties"
+                        risk_level = 'low'
                     
                     html_content += f"""
-                                <td><strong>{component}</strong></td>
-                                <td><code>{name}</code></td>
-                                <td><span class="badge bg-secondary">{status}</span></td>
+                                <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
+                                <td><code>{finding_type}</code></td>
+                                <td><span class="badge bg-success">Collected</span></td>
                                 <td><small>{details}</small></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                     """
