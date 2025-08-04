@@ -450,6 +450,13 @@ class YaraScanner(ScannerBase):
                 findings.extend(result)
         return findings
 
+    def _ram_within_limit(self):
+        """Проверка лимита использования RAM"""
+        if self.max_ram is None:
+            return True
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss < self.max_ram
+
     def scan(self, **kwargs) -> List[Dict[str, Any]]:
         """
         Оптимизированный метод сканирования файлов
@@ -461,9 +468,8 @@ class YaraScanner(ScannerBase):
         exclude_paths = kwargs.get("exclude_paths", []) + self.config.get("exclude_paths", []) + SKIP_PATHS
         max_file_size = kwargs.get("max_file_size", self.config.get("max_file_size", 10 * 1024 * 1024))
         max_scan_time = kwargs.get("max_scan_time", self.config.get("max_scan_time", float('inf')))
-        thread_count = kwargs.get("thread_count", self.config.get("thread_count", multiprocessing.cpu_count()))
         
-        self.logger.info(f"Начинаем оптимизированное сканирование с {thread_count} потоками")
+        self.logger.info(f"Начинаем оптимизированное сканирование с {self.thread_count} потоками")
         
         start_time = datetime.now()
         
@@ -478,7 +484,7 @@ class YaraScanner(ScannerBase):
         self.logger.info(f"Найдено {len(sorted_files)} файлов для сканирования")
         
         # Разбиваем на батчи для многопоточности
-        batch_size = max(1, len(sorted_files) // (thread_count * 4))
+        batch_size = max(1, len(sorted_files) // (self.thread_count * 4))
         file_batches = [sorted_files[i:i + batch_size] for i in range(0, len(sorted_files), batch_size)]
         
         # Сканируем в многопоточном режиме
@@ -541,6 +547,7 @@ class YaraScanner(ScannerBase):
         return findings
 
     def _ram_within_limit(self):
+        """Проверка лимита использования RAM"""
         if self.max_ram is None:
             return True
         process = psutil.Process(os.getpid())

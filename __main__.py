@@ -155,12 +155,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Максимальное количество потоков/процессов для сканирования"
     )
+    
     parser.add_argument(
         "--max-ram",
         type=int,
         default=None,
         help="Максимальный объем оперативной памяти (МБ), используемый сканером"
     )
+    
     return parser.parse_args()
 
 def run_scanner(args):
@@ -195,7 +197,7 @@ def main() -> int:
     if args.max_ram:
         for scanner_cfg in config.get('scanners', {}).values():
             scanner_cfg['max_ram'] = args.max_ram * 1024 * 1024  # в байтах
-
+        
     # Если указан --scanner, запускаем только один сканер (старое поведение)
     if args.scanner:
         if args.scanner in config.get('scanners', {}):
