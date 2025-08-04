@@ -53,6 +53,14 @@ def run_single_scanner(scanner_name: str, config: Dict[str, Any], args: argparse
         artifact_collector = ArtifactCollector(args.case_id, args.encryption_key)
         user_whitelist = load_user_whitelist()
         
+        # Применяем лимиты ресурсов к конфигурации
+        if args.max_cpu:
+            for scanner_cfg in config.get('scanners', {}).values():
+                scanner_cfg['thread_count'] = args.max_cpu
+        if args.max_ram:
+            for scanner_cfg in config.get('scanners', {}).values():
+                scanner_cfg['max_ram'] = args.max_ram * 1024 * 1024  # в байтах
+        
         # Создаем сканеры
         scanners = ScannerFactory.create_scanners(config, artifact_collector, user_whitelist)
         
@@ -143,6 +151,12 @@ def run_parallel_scanners(config: Dict[str, Any], args: argparse.Namespace) -> i
             if args.encryption_key:
                 cmd.extend(['--encryption-key', args.encryption_key])
             
+            if args.max_cpu:
+                cmd.extend(['--max-cpu', str(args.max_cpu)])
+            
+            if args.max_ram:
+                cmd.extend(['--max-ram', str(args.max_ram)])
+            
             logging.info(f"Starting scanner: {scanner_name}")
             p = subprocess.Popen(cmd)
             processes.append(p)
@@ -183,6 +197,9 @@ def aggregate_results(output_dir: str):
         
         # Генерируем HTML отчет
         generate_html_report(findings_dict, output_dir)
+        
+        # Очищаем промежуточные JSON файлы
+        cleanup_json_files(output_dir)
         
         # Очищаем артефакты
         cleanup_artifacts()
@@ -476,19 +493,43 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     """
                     
                 elif scanner_name == 'network_scanner':
-                    connection = finding.get('connection', 'Unknown')
-                    local_addr = finding.get('local_address', 'N/A')
-                    remote_addr = finding.get('remote_address', 'N/A')
-                    status = finding.get('status', 'Unknown')
-                    process = finding.get('process', 'Unknown')
-                    risk_level = finding.get('risk_level', 'medium')
+                    # Network scanner возвращает данные в формате {'type': '...', 'data': [...]}
+                    finding_type = finding.get('type', 'Unknown')
+                    data = finding.get('data', [])
+                    
+                    # Определяем детали и примеры
+                    if isinstance(data, list):
+                        count = len(data)
+                        # Формируем примеры
+                        examples = []
+                        for i, item in enumerate(data[:3]):
+                            if finding_type == 'network_connections':
+                                local = f"{item.get('local_ip', '-')}:" + (str(item.get('local_port', '-')) if item.get('local_port') else '-')
+                                remote = f"{item.get('remote_ip', '-')}:" + (str(item.get('remote_port', '-')) if item.get('remote_port') else '-')
+                                proc = item.get('process_name', '-')
+                                examples.append(f"{local} → {remote} ({proc})")
+                            elif finding_type == 'listening_ports':
+                                ip = item.get('ip', '-')
+                                port = item.get('port', '-')
+                                proc = item.get('process_name', '-')
+                                examples.append(f"{ip}:{port} ({proc})")
+                            elif finding_type == 'suspicious_activity':
+                                reason = item.get('reason', '-')
+                                conn = item.get('connection', {})
+                                local = f"{conn.get('local_ip', '-')}:" + (str(conn.get('local_port', '-')) if conn.get('local_port') else '-')
+                                remote = f"{conn.get('remote_ip', '-')}:" + (str(conn.get('remote_port', '-')) if conn.get('remote_port') else '-')
+                                examples.append(f"{local} → {remote} | {reason}")
+                            else:
+                                examples.append(str(item))
+                        details = f"{count} items. Примеры: " + ", ".join(examples)
+                        risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
+                    else:
+                        details = str(data)
+                        risk_level = 'low'
                     
                     html_content += f"""
-                                <td><strong>{connection}</strong></td>
-                                <td><code>{local_addr}</code></td>
-                                <td><code>{remote_addr}</code></td>
-                                <td><span class="badge bg-secondary">{status}</span></td>
-                                <td><small>{process}</small></td>
+                                <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
+                                <td colspan=4><small>{details}</small></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                     """
                     
@@ -625,6 +666,33 @@ def cleanup_artifacts():
     except Exception as e:
         logging.error(f"Error cleaning up artifacts: {e}")
 
+def cleanup_json_files(output_dir: str):
+    """Очистка промежуточных JSON файлов после создания отчета"""
+    try:
+        import glob
+        output_path = Path(output_dir)
+        
+        # Удаляем все JSON файлы в output директории
+        json_files = list(output_path.glob("*.json"))
+        json_files.extend(list(output_path.glob("**/*.json")))  # Рекурсивно
+        
+        deleted_count = 0
+        for json_file in json_files:
+            try:
+                json_file.unlink()
+                deleted_count += 1
+                logging.debug(f"Deleted JSON file: {json_file}")
+            except Exception as e:
+                logging.warning(f"Could not delete {json_file}: {e}")
+        
+        if deleted_count > 0:
+            logging.info(f"Cleaned up {deleted_count} JSON files from output directory")
+        else:
+            logging.info("No JSON files found to clean up")
+            
+    except Exception as e:
+        logging.error(f"Error cleaning up JSON files: {e}")
+
 def parse_args() -> argparse.Namespace:
     """Парсинг аргументов командной строки"""
     parser = argparse.ArgumentParser(
@@ -663,6 +731,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scanner",
         help="Single scanner to run"
+    )
+    
+    parser.add_argument(
+        "--max-cpu",
+        type=int,
+        default=None,
+        help="Maximum number of threads/processes for scanning"
+    )
+    
+    parser.add_argument(
+        "--max-ram",
+        type=int,
+        default=None,
+        help="Maximum RAM usage (MB) for scanner"
     )
     
     return parser.parse_args()
