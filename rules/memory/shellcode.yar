@@ -1,10 +1,10 @@
 /*
-    Правила YARA для обнаружения шелл-кода и подозрительных паттернов в памяти
+    YARA rules for shellcode and suspicious pattern detection in memory
 */
 
 rule generic_shellcode {
     meta:
-        description = "Обнаружение шелл-кода по характерным признакам"
+        description = "Generic shellcode detection"
         author = "RuScan"
         severity = "high"
         tags = ["shellcode", "injection"]
@@ -14,12 +14,12 @@ rule generic_shellcode {
         $nop1 = { 90 90 90 90 90 90 90 90 }
         $nop2 = { 66 90 66 90 66 90 66 90 }
         
-        // Типичные инструкции шелл-кода
+        // Typical shellcode instructions
         $push_call = { 68 ?? ?? ?? ?? E8 }
         $get_eip = { E8 00 00 00 00 }
         $api_hashing = { 33 C0 66 B8 ?? ?? }
         
-        // Строки для поиска API
+        // API strings
         $kernel32 = "kernel32.dll" nocase ascii wide
         $loadlib = "LoadLibraryA" ascii
         $getproc = "GetProcAddress" ascii
@@ -32,24 +32,24 @@ rule generic_shellcode {
 
 rule process_injection {
     meta:
-        description = "Обнаружение внедрения кода в процессы"
+        description = "Process injection detection"
         author = "RuScan"
         severity = "high"
         tags = ["injection", "process"]
 
     strings:
-        // API для внедрения кода
+        // Injection APIs
         $api1 = "VirtualAllocEx" ascii
         $api2 = "WriteProcessMemory" ascii
         $api3 = "CreateRemoteThread" ascii
         $api4 = "NtCreateThreadEx" ascii
         $api5 = "RtlCreateUserThread" ascii
         
-        // Флаги доступа к памяти
-        $mem1 = { 00 30 00 00 } // PAGE_EXECUTE_READWRITE
-        $mem2 = { 00 10 00 00 } // PAGE_EXECUTE
+        // Memory access flags
+        $mem1 = { 00 30 00 00 }
+        $mem2 = { 00 10 00 00 }
         
-        // Подозрительные паттерны
+        // Suspicious patterns
         $pattern1 = { 48 83 EC ?? 48 8B ?? ?? ?? 48 8B }
         $pattern2 = { 48 8B 05 ?? ?? ?? ?? 48 85 C0 }
 
@@ -61,18 +61,18 @@ rule process_injection {
 
 rule powershell_shellcode {
     meta:
-        description = "Обнаружение PowerShell shellcode"
+        description = "PowerShell shellcode detection"
         author = "RuScan"
         severity = "high"
         tags = ["powershell", "shellcode"]
 
     strings:
-        // PowerShell команды
+        // PowerShell commands
         $cmd1 = "[System.Runtime.InteropServices.Marshal]::Copy" ascii wide
         $cmd2 = "VirtualAlloc" ascii wide
         $cmd3 = "0xfc,0x48,0x83,0xe4" ascii wide
         
-        // Подозрительные функции
+        // Suspicious functions
         $func1 = "New-Object System.IO.MemoryStream" ascii wide
         $func2 = "System.Runtime.InteropServices.RuntimeInformation" ascii wide
 
@@ -83,26 +83,26 @@ rule powershell_shellcode {
 
 rule reflective_dll {
     meta:
-        description = "Обнаружение рефлективной загрузки DLL"
+        description = "Reflective DLL loading detection"
         author = "RuScan"
         severity = "high"
         tags = ["dll", "injection"]
 
     strings:
-        // Характерные строки
+        // Characteristic strings
         $refl1 = "ReflectiveLoader" ascii
         $refl2 = "reflective_dll" ascii
         
-        // PE заголовок в памяти
+        // PE header in memory
         $mz = "MZ" ascii
         $pe = "PE" ascii
         
-        // Секции
+        // Sections
         $sec1 = ".text" ascii
         $sec2 = ".rdata" ascii
         $sec3 = ".data" ascii
         
-        // API для загрузки
+        // Loading APIs
         $api1 = "LoadLibraryA" ascii
         $api2 = "GetProcAddress" ascii
         $api3 = "VirtualAlloc" ascii
@@ -115,22 +115,22 @@ rule reflective_dll {
 
 rule hollowing_detection {
     meta:
-        description = "Обнаружение Process Hollowing"
+        description = "Process Hollowing detection"
         author = "RuScan"
         severity = "high"
         tags = ["hollowing", "injection"]
 
     strings:
-        // API для Process Hollowing
+        // Process Hollowing APIs
         $api1 = "NtUnmapViewOfSection" ascii
         $api2 = "ZwUnmapViewOfSection" ascii
         $api3 = "NtWriteVirtualMemory" ascii
         $api4 = "SetThreadContext" ascii
         
-        // Флаги создания процесса
-        $flag1 = { 08 00 00 00 } // CREATE_SUSPENDED
+        // Process creation flags
+        $flag1 = { 08 00 00 00 }
         
-        // Паттерны работы с памятью
+        // Memory manipulation patterns
         $mem1 = { 48 8B 45 ?? 48 8B 40 ?? }
         $mem2 = { 48 8B 05 ?? ?? ?? ?? 48 85 C0 }
 
@@ -141,7 +141,7 @@ rule hollowing_detection {
 
 rule windows_shellcode {
     meta:
-        description = "Детектирование шелл-кода Windows"
+        description = "Windows shellcode detection"
         author = "RuScan"
         date = "2024-06-04"
         
@@ -151,10 +151,10 @@ rule windows_shellcode {
         $api3 = "VirtualAlloc" ascii wide
         $api4 = "VirtualProtect" ascii wide
         
-        $shellcode1 = { 31 ?? 50 50 50 }  // xor reg, reg + push sequence
-        $shellcode2 = { 68 ?? ?? ?? ?? }   // push immediate
-        $shellcode3 = { FF 75 ?? }         // push ebp+XX
-        $shellcode4 = { FF 55 ?? }         // call ebp+XX
+        $shellcode1 = { 31 ?? 50 50 50 }
+        $shellcode2 = { 68 ?? ?? ?? ?? }
+        $shellcode3 = { FF 75 ?? }
+        $shellcode4 = { FF 55 ?? }
         
     condition:
         (2 of ($api*)) and (2 of ($shellcode*))
