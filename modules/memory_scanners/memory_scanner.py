@@ -254,6 +254,11 @@ class MemoryScanner(ScannerBase):
             # Очищаем память
             gc.collect()
             
+            # Сохраняем результаты в _findings
+            self._findings = findings
+            
+            return findings
+            
         except Exception as e:
             self.logger.error(f"Error in memory scan: {str(e)}")
             
@@ -325,10 +330,12 @@ class MemoryScanner(ScannerBase):
             self.logger.debug(f"Error analyzing PE in memory: {str(e)}")
             return None
 
-    def collect_artifacts(self, findings: List[Dict[str, Any]]) -> None:
+    def collect_artifacts(self, findings: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Сбор артефактов из памяти"""
+        artifacts = {}
+        
         if not self.artifact_collector:
-            return
+            return artifacts
 
         for finding in findings:
             try:
@@ -342,25 +349,28 @@ class MemoryScanner(ScannerBase):
                     f"process_{pid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.dmp"
                 )
 
-                self.create_memory_dump(pid, dump_path)
+                if self.create_memory_dump(pid, dump_path):
+                    # Сохраняем метаданные
+                    metadata = {
+                        'scanner': 'memory',
+                        'pid': pid,
+                        'process_name': finding.get('name'),
+                        'findings': finding.get('findings', []),
+                        'scan_time': self.start_time.isoformat() if self.start_time else None
+                    }
 
-                # Сохраняем метаданные
-                metadata = {
-                    'scanner': 'memory',
-                    'pid': pid,
-                    'process_name': finding.get('name'),
-                    'findings': finding.get('findings', []),
-                    'scan_time': self.start_time.isoformat() if self.start_time else None
-                }
-
-                self.artifact_collector.collect_file(
-                    dump_path,
-                    'memory_dump',
-                    metadata
-                )
+                    self.artifact_collector.collect_file(
+                        dump_path,
+                        'memory_dump',
+                        metadata
+                    )
+                    
+                    artifacts[f"memory_dump_{pid}"] = dump_path
 
             except Exception as e:
                 self.logger.error(f"Error collecting memory artifact for PID {pid}: {str(e)}")
+        
+        return artifacts
 
     def create_memory_dump(self, pid: int, output_path: str) -> bool:
         """Создание дампа памяти процесса"""

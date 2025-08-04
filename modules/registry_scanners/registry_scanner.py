@@ -101,17 +101,17 @@ class RegistryScanner(ScannerBase):
     
     def __init__(self, config: Dict[str, Any], artifact_collector=None):
         super().__init__("registry_scanner", config, artifact_collector)
-        self.findings = []
-        self.cache = RegistryCache()
-        self.change_tracker = RegistryChangeTracker()
-        self.scanned_keys: Set[str] = set()
+        self.scanned_keys = set()
         self.findings_lock = Lock()
-        self.last_scan_time = 0
+        self._findings = []  # Хранилище для результатов сканирования
+        self.last_scan_time = None
         
-        # Загружаем приоритеты из конфигурации или используем значения по умолчанию
-        self.priorities = self.DEFAULT_PRIORITIES.copy()
-        if 'priorities' in config:
-            self.priorities.update(config['priorities'])
+        # Инициализируем кэш и трекер изменений
+        cache_config = self.config.get('performance', {}).get('caching', {})
+        self.cache = RegistryCache(cache_config.get('cache_dir', 'cache/registry'))
+        
+        change_tracker_config = self.config.get('change_tracking', {})
+        self.change_tracker = RegistryChangeTracker(change_tracker_config.get('history_file', 'registry_history.json'))
 
     def _get_key_priority(self, path: str) -> int:
         """
@@ -300,7 +300,7 @@ class RegistryScanner(ScannerBase):
                 findings = self._check_suspicious_changes(path, key_info)
                 if findings:
                     with self.findings_lock:
-                        self.findings.extend(findings)
+                        self._findings.extend(findings)
                         
             # Рекурсивно сканируем подключи
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.config.get('performance', {}).get('parallel_scan', {}).get('max_subworkers', 10)) as executor:
@@ -325,7 +325,7 @@ class RegistryScanner(ScannerBase):
         Returns:
             List[Dict[str, Any]]: Список находок
         """
-        self.findings = []
+        findings = []
         scan_paths = self.config.get('scan', {}).get('include_keys', [])
         
         # Группируем пути по приоритетам
@@ -362,7 +362,12 @@ class RegistryScanner(ScannerBase):
                         self.logger.error(f"Error during registry scan: {str(e)}")
                         
         self.last_scan_time = datetime.now().timestamp()
-        return self.findings
+        
+        # Очистка ресурсов
+        self._cleanup()
+        
+        # Сохраняем результаты в _findings
+        return self._findings
 
     def _cleanup(self) -> None:
         """Очистка устаревших данных"""

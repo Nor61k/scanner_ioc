@@ -167,6 +167,9 @@ class NetworkScanner(ScannerBase):
                 'type': 'suspicious_activity',
                 'data': suspicious
             })
+        
+        # Сохраняем результаты в _findings
+        self._findings = findings
             
         return findings
 

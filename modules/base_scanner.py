@@ -30,6 +30,7 @@ class ScannerBase(ABC):
         self.end_time = None
         self.findings_queue = queue.Queue()
         self.stop_event = threading.Event()
+        self._findings = []  # Хранилище для результатов сканирования
         
     def initialize(self) -> bool:
         """Инициализация сканера перед запуском"""
@@ -66,13 +67,19 @@ class ScannerBase(ABC):
             self.logger.error(f"Error adding finding: {str(e)}")
             
     def get_findings(self) -> List[Dict[str, Any]]:
-        """Получение всех находок из очереди"""
+        """Получение всех находок"""
         findings = []
         try:
+            # Пытаемся получить находки из очереди
             while not self.findings_queue.empty():
                 findings.append(self.findings_queue.get_nowait())
         except Exception as e:
-            self.logger.error(f"Error getting findings: {str(e)}")
+            self.logger.error(f"Error getting findings from queue: {str(e)}")
+        
+        # Если очередь пуста, используем _findings
+        if not findings and hasattr(self, '_findings'):
+            findings = self._findings
+        
         return findings
         
     def save_findings(self, findings: List[Dict[str, Any]], output_file: str) -> bool:
@@ -182,10 +189,18 @@ class ScannerBase(ABC):
         """
         Сохраняет находки сканера в файл в указанной директории.
         """
-        findings = self.get_findings()
-        os.makedirs(output_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"{self.name}_{timestamp}.json")
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(findings, f, indent=4, ensure_ascii=False)
-        return output_file 
+        try:
+            findings = self.get_findings()
+            os.makedirs(output_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(output_dir, f"{self.name}_{timestamp}.json")
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(findings, f, indent=4, ensure_ascii=False)
+            
+            self.logger.info(f"Results saved to: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            self.logger.error(f"Error saving results: {str(e)}")
+            return "" 

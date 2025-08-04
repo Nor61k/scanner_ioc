@@ -472,6 +472,9 @@ class IOCScanner(ScannerBase):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
                 
+        # Сохраняем результаты в _findings
+        self._findings = findings
+        
         return findings
 
     def collect_artifacts(self, findings: List[Dict[str, Any]]) -> Dict[str, Path]:

@@ -528,6 +528,9 @@ class YaraScanner(ScannerBase):
         if 'files' in self.user_whitelist:
             findings = [f for f in findings if f.get('file') not in self.user_whitelist['files']]
         
+        # Сохраняем результаты в _findings
+        self._findings = findings
+        
         return findings
 
     def _scan_batch_optimized(self, files_batch: List[str]) -> List[Dict[str, Any]]:
@@ -566,13 +569,17 @@ class YaraScanner(ScannerBase):
         artifacts = {}
         
         try:
+            # Создаем директорию для артефактов если её нет
+            artifacts_dir = Path("artifacts") / datetime.now().strftime("%Y%m%d_%H%M%S") / "yara"
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
+            
             for finding in findings:
                 if finding["type"] == "yara_match":
                     source_file = Path(finding["file"])
                     if source_file.exists():
                         # Создаем имя файла с информацией о правиле
                         info_name = f"{source_file.stem}_{finding['rule']}_info.json"
-                        info_path = self.artifacts_dir / info_name
+                        info_path = artifacts_dir / info_name
                         
                         # Сохраняем информацию о находке
                         try:
@@ -584,7 +591,7 @@ class YaraScanner(ScannerBase):
                             
                         # Копируем сам файл
                         try:
-                            dest_file = self.artifacts_dir / source_file.name
+                            dest_file = artifacts_dir / source_file.name
                             shutil.copy2(source_file, dest_file)
                             artifacts[f"yara_file_{finding['rule']}"] = dest_file
                         except Exception as e:

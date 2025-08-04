@@ -66,11 +66,18 @@ def run_single_scanner(scanner_name: str, config: Dict[str, Any], args: argparse
                 start_time = time.time()
                 
                 # Логируем начало сканирования
-                jetcsirt_logger.log_scan_start(scanner.name, scanner.config)
+                scanner_config = config.get("scanners", {}).get(scanner_name, {})
+                jetcsirt_logger.log_scan_start(scanner.name, scanner_config)
                 
                 try:
                     findings = scanner.scan()
-                    artifacts = scanner.collect_artifacts(findings) if findings else {}
+                    artifacts_result = scanner.collect_artifacts(findings) if findings else {}
+                    # Убеждаемся, что artifacts_result - это словарь
+                    if artifacts_result is None:
+                        artifacts_result = {}
+                    elif not isinstance(artifacts_result, dict):
+                        artifacts_result = {}
+                    
                     scanner.save_results(args.output)
                     
                     # Логируем завершение
@@ -82,7 +89,7 @@ def run_single_scanner(scanner_name: str, config: Dict[str, Any], args: argparse
                     with open(json_path, 'w', encoding='utf-8') as f:
                         json.dump({
                             "findings": findings,
-                            "artifacts": {str(k): str(v) for k, v in artifacts.items()}
+                            "artifacts": {str(k): str(v) for k, v in artifacts_result.items()}
                         }, f, ensure_ascii=False, indent=2)
                     
                     logging.info(f"Results saved: {json_path}")
@@ -114,9 +121,18 @@ def run_parallel_scanners(config: Dict[str, Any], args: argparse.Namespace) -> i
         
         # Запускаем каждый сканер в отдельном процессе
         for scanner_name in enabled_scanners:
+            # Определяем правильный путь к файлу
+            if getattr(sys, 'frozen', False):
+                # Если запущено как exe
+                script_path = sys.executable
+            else:
+                # Если запущено как Python скрипт
+                script_path = sys.executable
+                script_file = __file__
+            
             cmd = [
-                sys.executable, 
-                __file__, 
+                script_path, 
+                script_file, 
                 '--scanner', scanner_name,
                 '--config', args.config,
                 '--output', args.output,
@@ -127,6 +143,7 @@ def run_parallel_scanners(config: Dict[str, Any], args: argparse.Namespace) -> i
             if args.encryption_key:
                 cmd.extend(['--encryption-key', args.encryption_key])
             
+            logging.info(f"Starting scanner: {scanner_name}")
             p = subprocess.Popen(cmd)
             processes.append(p)
         
@@ -298,6 +315,17 @@ def main() -> int:
         args = parse_args()
         
         # Настройка логирования
+        os.makedirs(args.logs, exist_ok=True)
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(os.path.join(args.logs, 'scan.log')),
+                logging.StreamHandler()
+            ]
+        )
+        
+        # Инициализируем jetcsirt_logger
         jetcsirt_logger.log_dir = args.logs
         
         # Загрузка конфигурации
