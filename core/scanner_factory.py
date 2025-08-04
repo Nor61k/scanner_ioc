@@ -56,7 +56,14 @@ class ScannerFactory:
                 continue
                 
             try:
-                scanner = scanner_class(scanner_config, artifact_collector, user_whitelist)
+                # Создаем сканер с правильными аргументами в зависимости от типа
+                if scanner_name in ['yara_scanner', 'memory_scanner', 'ioc_scanner']:
+                    # Эти сканеры принимают user_whitelist
+                    scanner = scanner_class(scanner_config, artifact_collector, user_whitelist)
+                else:
+                    # Остальные сканеры принимают только config и artifact_collector
+                    scanner = scanner_class(scanner_config, artifact_collector)
+                    
                 scanners.append(scanner)
                 logging.info(f"Created scanner: {scanner_name}")
             except Exception as e:

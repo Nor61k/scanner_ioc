@@ -61,7 +61,7 @@ rule process_injection {
 
 rule powershell_shellcode {
     meta:
-        description = "Обнаружение шелл-кода в PowerShell"
+        description = "Обнаружение PowerShell shellcode"
         author = "RuScan"
         severity = "high"
         tags = ["powershell", "shellcode"]
@@ -71,9 +71,6 @@ rule powershell_shellcode {
         $cmd1 = "[System.Runtime.InteropServices.Marshal]::Copy" ascii wide
         $cmd2 = "VirtualAlloc" ascii wide
         $cmd3 = "0xfc,0x48,0x83,0xe4" ascii wide
-        
-        // Base64 encoded shellcode
-        // (удалено правило $b64 из-за синтаксиса [ ... ])
         
         // Подозрительные функции
         $func1 = "New-Object System.IO.MemoryStream" ascii wide
