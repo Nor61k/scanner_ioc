@@ -572,8 +572,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     file_modified = finding.get('file_modified', 'Unknown')
                     strings = finding.get('strings', [])
                     
-                    # Отладочная информация
-                    print(f"DEBUG: file_hash={file_hash}, file_owner={file_owner}, file_modified={file_modified}")
+
                     
                     # Форматируем дату модификации
                     try:
@@ -626,7 +625,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><code>{file_path}</code></td>
                                 <td><strong>{rule_name}</strong></td>
                                 <td><span class="badge severity-{severity}">{severity.upper()}</span></td>
-                                <td><code>{file_hash[:16]}...</code></td>
+                                <td><code>{file_hash[:16] if file_hash != 'Unknown' else 'Unknown'}...</code></td>
                                 <td><small>{file_owner}</small></td>
                                 <td><small>{formatted_date}</small></td>
                                 <td><small>{match_details_text}</small></td>
