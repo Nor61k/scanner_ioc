@@ -229,7 +229,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         for scanner_name, data in findings_dict.items():
             findings_count = len(data.get('findings', []))
             if findings_count > 0:
-                toc_items.append(f'<li><a href="#{scanner_name}">{scanner_name} ({findings_count} findings)</a></li>')
+                                    toc_items.append(f'<li><a href="#{scanner_name}">{scanner_name} ({findings_count} alerts)</a></li>')
         
         # Начинаем HTML
         html_content = f"""
@@ -254,8 +254,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             margin-top: 1rem;
         }}
         .severity-high {{
-            background-color: #f8d7da !important;
-            color: #721c24 !important;
+            background-color: #ffeaa7 !important;
+            color: #d63031 !important;
         }}
         .severity-medium {{
             background-color: #fff3cd !important;
@@ -352,17 +352,21 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>Hostname:</strong><br>
                     <code>{hostname}</code>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>IP Address:</strong><br>
                     <code>{ip_address}</code>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>Build:</strong><br>
                     <code>{build_number}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>OS:</strong><br>
+                    <code>{platform.system()} {platform.release()}</code>
                 </div>
             </div>
             <div class="row mt-2">
@@ -401,7 +405,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             <thead class="table-dark">
                                 <tr>
                                     <th>Scanner</th>
-                                    <th>Findings</th>
+                                    <th>Alerts</th>
                                     <th>Artifacts</th>
                                     <th>Status</th>
                                 </tr>
@@ -416,7 +420,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             
             if findings_count > 0:
                 status = "🔴 Found"
-                status_class = "bg-danger"
+                status_class = "bg-warning"
             else:
                 status = "🟢 Clean"
                 status_class = "bg-success"
@@ -472,13 +476,13 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         <div class="scanner-section" id="{scanner_name}">
             <div class="scanner-header">
                 <h3><i class="fas fa-search"></i> {scanner_name.replace('_', ' ').title()}</h3>
-                <p class="mb-0">Found {len(findings)} findings, {len(artifacts)} artifacts</p>
+                <p class="mb-0">Found {len(findings)} alerts, {len(artifacts)} artifacts</p>
             </div>
             
             <!-- Находки -->
             <div class="findings-section">
                 <h4 class="collapsible" onclick="toggleSection('findings-{scanner_name}')">
-                    <i class="fas fa-exclamation-triangle"></i> Findings 
+                    <i class="fas fa-exclamation-triangle"></i> Alerts 
                     <span class="badge bg-primary">{len(findings)}</span>
                     <i class="fas fa-chevron-down collapsible-icon" id="findings-{scanner_name}-icon"></i>
                 </h4>
@@ -566,20 +570,41 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     meta = finding.get('meta', {})
                     strings = finding.get('strings', [])
                     
-                    # Формируем детали срабатывания
+                    # Формируем детали срабатывания как в Thor
                     match_details = []
-                    for string_match in strings[:3]:  # Показываем первые 3 совпадения
+                    for i, string_match in enumerate(strings[:5], 1):  # Показываем первые 5 совпадений
                         identifier = string_match.get('identifier', 'Unknown')
                         offset = string_match.get('offset', 0)
                         data = string_match.get('data', '')
                         
-                        # Ограничиваем длину данных для читаемости
-                        if len(data) > 50:
-                            data = data[:50] + "..."
+                        # Конвертируем hex в читаемый вид
+                        try:
+                            if data.startswith('0x') or all(c in '0123456789abcdefABCDEF' for c in data):
+                                # Это hex данные, конвертируем в ASCII
+                                hex_data = data.replace('0x', '')
+                                if len(hex_data) % 2 == 0:
+                                    ascii_data = bytes.fromhex(hex_data).decode('utf-8', errors='ignore')
+                                    data_display = f"{data} ({ascii_data})"
+                                else:
+                                    data_display = data
+                            else:
+                                data_display = data
+                        except:
+                            data_display = data
                         
-                        match_details.append(f"{identifier}: {data} (offset: {offset})")
+                        # Ограничиваем длину данных для читаемости
+                        if len(data_display) > 100:
+                            data_display = data_display[:100] + "..."
+                        
+                        # Форматируем как в Thor: "identifier: data at offset"
+                        match_details.append(f"<strong>{identifier}:</strong> {data_display} <code>at 0x{offset:x}</code>")
                     
                     match_details_text = "<br>".join(match_details) if match_details else "No string details"
+                    
+                    # Добавляем описание угрозы из метаданных
+                    threat_description = meta.get('description', meta.get('threat', ''))
+                    if threat_description:
+                        match_details_text = f"<strong>Threat:</strong> {threat_description}<br><br>" + match_details_text
                     
                     html_content += f"""
                                 <td><code>{file_path}</code></td>
@@ -799,7 +824,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
-            // Находим все секции findings и показываем их по умолчанию
+            // Находим все секции alerts и показываем их по умолчанию
             const findingsSections = document.querySelectorAll('.findings-section');
             findingsSections.forEach(section => {
                 const content = section.querySelector('.collapsible-content');
