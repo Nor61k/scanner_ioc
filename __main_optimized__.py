@@ -286,7 +286,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             margin-bottom: 1rem;
         }}
         .system-info {{
-            background: linear-gradient(135deg, rgba(40, 167, 69, 0.9) 0%, rgba(32, 201, 151, 0.9) 100%);
+            background: linear-gradient(135deg, rgba(0, 123, 255, 0.9) 0%, rgba(0, 191, 255, 0.9) 100%);
             color: white;
             padding: 1.5rem;
             border-radius: 0.5rem;
@@ -711,7 +711,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             <div class="artifacts-section">
                 <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
                     <i class="fas fa-file-archive"></i> Artifacts 
-                    <span class="badge bg-secondary">{{len(artifacts)}}</span>
+                    <span class="badge bg-secondary">{len(artifacts)}</span>
                     <i class="fas fa-chevron-down" id="artifacts-{scanner_name}-icon"></i>
                 </h4>
                 <div class="collapsible-content" id="artifacts-{scanner_name}">
