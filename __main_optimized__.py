@@ -199,7 +199,7 @@ def aggregate_results(output_dir: str):
         generate_html_report(findings_dict, output_dir)
         
         # Очищаем промежуточные JSON файлы
-        cleanup_json_files(output_dir)
+        # cleanup_json_files(output_dir)  # Временно отключено для отладки
         
         # Очищаем артефакты
         cleanup_artifacts()
