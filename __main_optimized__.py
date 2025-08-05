@@ -711,7 +711,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             <div class="artifacts-section">
                 <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
                     <i class="fas fa-file-archive"></i> Artifacts 
-                    <span class="badge bg-secondary">{len(artifacts)}</span>
+                    <span class="badge bg-secondary">{{len(artifacts)}}</span>
                     <i class="fas fa-chevron-down" id="artifacts-{scanner_name}-icon"></i>
                 </h4>
                 <div class="collapsible-content" id="artifacts-{scanner_name}">
