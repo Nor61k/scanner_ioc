@@ -708,6 +708,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </div>
             </div>
             
+            # Формируем HTML для артефактов
+            artifacts_html = f"""
             <!-- Артефакты -->
             <div class="artifacts-section">
                 <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
@@ -729,6 +731,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             </thead>
                             <tbody>
             """
+            
+            html_content += artifacts_html
             
             # Добавляем артефакты
             for artifact_name, artifact_path in artifacts.items():
@@ -848,11 +852,12 @@ def cleanup_json_files(output_dir: str):
         deleted_count = 0
         for json_file in json_files:
             try:
-                json_file.unlink()
-                deleted_count += 1
-                logging.debug(f"Deleted JSON file: {json_file}")
+                if json_file.exists():
+                    json_file.unlink()
+                    deleted_count += 1
+                    logging.debug(f"Deleted JSON file: {json_file}")
             except Exception as e:
-                logging.warning(f"Could not delete {json_file}: {e}")
+                logging.debug(f"Could not delete {json_file}: {e}")
         
         if deleted_count > 0:
             logging.info(f"Cleaned up {deleted_count} JSON files from output directory")
