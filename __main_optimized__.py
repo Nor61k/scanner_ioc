@@ -710,27 +710,26 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             
             # Формируем HTML для артефактов
             html_content += f"""
-            <div class="artifacts-section">
-                <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
-                    <i class="fas fa-file-archive"></i> Artifacts 
-                    <span class="badge bg-secondary">{artifacts_count}</span>
-                    <i class="fas fa-chevron-down" id="artifacts-{scanner_name}-icon"></i>
-                </h4>
-                <div class="collapsible-content" id="artifacts-{scanner_name}">
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-sm artifacts-table">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Artifact</th>
-                                    <th>Type</th>
-                                    <th>Path</th>
-                                    <th>Size</th>
-                                    <th>Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            """
-            
+<div class="artifacts-section">
+    <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
+        <i class="fas fa-file-archive"></i> Artifacts
+        <span class="badge bg-secondary">{artifacts_count}</span>
+        <i class="fas fa-chevron-down" id="artifacts-{scanner_name}-icon"></i>
+    </h4>
+    <div class="collapsible-content" id="artifacts-{scanner_name}">
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm artifacts-table">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Artifact</th>
+                        <th>Type</th>
+                        <th>Path</th>
+                        <th>Size</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+"""
             # Добавляем артефакты
             for artifact_name, artifact_path in artifacts.items():
                 try:
@@ -739,26 +738,23 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     size_str = f"{size:,} bytes" if size < 1024 else f"{size/1024:.1f} KB"
                 except:
                     size_str = "Unknown"
-                
                 html_content += f"""
-                                <tr>
-                                    <td><strong>{artifact_name}</strong></td>
-                                    <td><span class="badge bg-info">File</span></td>
-                                    <td><code>{artifact_path}</code></td>
-                                    <td><small>{size_str}</small></td>
-                                    <td><small>Collected during {scanner_name} scan</small></td>
-                                </tr>
-                """
-            
+                    <tr>
+                        <td><strong>{artifact_name}</strong></td>
+                        <td><span class="badge bg-info">File</span></td>
+                        <td><code>{artifact_path}</code></td>
+                        <td><small>{size_str}</small></td>
+                        <td><small>Collected during {scanner_name} scan</small></td>
+                    </tr>
+"""
             html_content += """
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+                </tbody>
+            </table>
         </div>
-            """
-        
+    </div>
+</div>
+"""
+
         # Закрываем HTML
         html_content += """
     </div>
