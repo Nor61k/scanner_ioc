@@ -709,7 +709,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             </div>
             
             # Формируем HTML для артефактов
-            artifacts_html = f"""
+            html_content += f"""
             <div class="artifacts-section">
                 <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
                     <i class="fas fa-file-archive"></i> Artifacts 
@@ -730,8 +730,6 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             </thead>
                             <tbody>
             """
-            
-            html_content += artifacts_html
             
             # Добавляем артефакты
             for artifact_name, artifact_path in artifacts.items():
