@@ -286,14 +286,37 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             margin-bottom: 1rem;
         }}
         .system-info {{
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.9) 0%, rgba(32, 201, 151, 0.9) 100%);
             color: white;
             padding: 1.5rem;
             border-radius: 0.5rem;
             margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }}
+        .system-info::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZ3JhZGllbnQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMDAwOyBzdG9wLW9wYWNpdHk6MC4xIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMwMDA7IHN0b3Atb3BhY2l0eTowLjA1IiAvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmFkaWVudCkiIC8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0OCIgZm9udC13ZWlnaHQ9ImJvbGQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjZmZmIj5KRVQ8L3RleHQ+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSI0OCIgZm9udC13ZWlnaHQ9ImJvbGQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuOWVtIiBmaWxsPSIjMDBiZmYiPkNTSVJUPC90ZXh0Pgo8L3N2Zz4=');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center right;
+            opacity: 0.1;
+            z-index: 0;
+        }}
+        .system-info > * {{
+            position: relative;
+            z-index: 1;
         }}
         .collapsible {{
             cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s;
         }}
         .collapsible:hover {{
             background-color: rgba(0,0,0,0.1);
@@ -304,9 +327,16 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             background-color: #f8f9fa;
             border-radius: 0.25rem;
             margin-top: 0.5rem;
+            border-left: 3px solid #007bff;
         }}
         .collapsible-content.show {{
             display: block;
+        }}
+        .collapsible-icon {{
+            transition: transform 0.2s;
+        }}
+        .collapsible-icon.rotated {{
+            transform: rotate(180deg);
         }}
     </style>
 </head>
@@ -446,9 +476,14 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             
             <!-- Находки -->
             <div class="findings-section">
-                <h4><i class="fas fa-exclamation-triangle"></i> Findings</h4>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm findings-table">
+                <h4 class="collapsible" onclick="toggleSection('findings-{scanner_name}')">
+                    <i class="fas fa-exclamation-triangle"></i> Findings 
+                    <span class="badge bg-primary">{len(findings)}</span>
+                    <i class="fas fa-chevron-down collapsible-icon" id="findings-{scanner_name}-icon"></i>
+                </h4>
+                <div class="collapsible-content show" id="findings-{scanner_name}">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm findings-table">
                         <thead class="table-dark">
                             <tr>
             """
@@ -495,7 +530,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Details</th>
-                                <th>Risk Level</th>
+                                <th>Type</th>
                 """
             elif scanner_name == 'registry_scanner':
                 html_content += """
@@ -621,17 +656,19 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                         # Если data - это список, показываем количество элементов
                         count = len(data)
                         details = f"Found {count} items"
+                        data_type = "List"
                     else:
                         # Если data - это словарь, показываем ключи
                         count = len(data.keys()) if isinstance(data, dict) else 0
                         details = f"Found {count} properties"
+                        data_type = "Dictionary"
                     
                     html_content += f"""
                                 <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
                                 <td><code>{finding_type}</code></td>
                                 <td><span class="badge bg-success">Collected</span></td>
                                 <td><small>{details}</small></td>
-                                <td><span class="badge severity-none">NONE</span></td>
+                                <td><span class="badge bg-info">{data_type}</span></td>
                     """
                     
                 elif scanner_name == 'registry_scanner':
@@ -666,6 +703,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             html_content += """
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
             
@@ -734,25 +772,42 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 content.classList.remove('show');
                 icon.classList.remove('fa-chevron-up');
                 icon.classList.add('fa-chevron-down');
+                icon.classList.remove('rotated');
             } else {
                 content.classList.add('show');
                 icon.classList.remove('fa-chevron-down');
                 icon.classList.add('fa-chevron-up');
+                icon.classList.add('rotated');
             }
         }
         
-        // Показываем findings по умолчанию, скрываем artifacts
+        // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', function() {
-            // Находим все секции findings и показываем их
+            // Находим все секции findings и показываем их по умолчанию
             const findingsSections = document.querySelectorAll('.findings-section');
             findingsSections.forEach(section => {
-                const table = section.querySelector('.table-responsive');
-                if (table) {
-                    table.style.display = 'block';
+                const content = section.querySelector('.collapsible-content');
+                const icon = section.querySelector('.collapsible-icon');
+                if (content && icon) {
+                    content.classList.add('show');
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                    icon.classList.add('rotated');
                 }
             });
             
             // Артефакты по умолчанию скрыты (уже в CSS)
+            const artifactsSections = document.querySelectorAll('.artifacts-section');
+            artifactsSections.forEach(section => {
+                const content = section.querySelector('.collapsible-content');
+                const icon = section.querySelector('.collapsible-icon');
+                if (content && icon) {
+                    content.classList.remove('show');
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                    icon.classList.remove('rotated');
+                }
+            });
         });
     </script>
 </body>
