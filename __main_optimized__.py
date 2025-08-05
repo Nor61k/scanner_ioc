@@ -352,29 +352,29 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>Hostname:</strong><br>
                     <code>{hostname}</code>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>IP Address:</strong><br>
                     <code>{ip_address}</code>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>Build:</strong><br>
                     <code>{build_number}</code>
                 </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-md-4">
-                    <strong>Scan Started:</strong><br>
-                    <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <strong>User:</strong><br>
                     <code>{current_user}</code>
                 </div>
-                <div class="col-md-4">
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <strong>Scan Started:</strong><br>
+                    <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>
+                </div>
+                <div class="col-md-6">
                     <strong>Scan Completed:</strong><br>
                     <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>
                 </div>
