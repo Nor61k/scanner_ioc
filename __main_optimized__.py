@@ -592,11 +592,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     strings = finding.get('strings', [])
                     
                     # Пропускаем дубликаты - если файл уже был обработан
-                    if not hasattr(self, '_processed_files'):
-                        self._processed_files = set()
-                    if file_path in self._processed_files:
+                    if not hasattr(generate_html_report, '_processed_files'):
+                        generate_html_report._processed_files = set()
+                    if file_path in generate_html_report._processed_files:
                         continue
-                    self._processed_files.add(file_path)
+                    generate_html_report._processed_files.add(file_path)
                     
                     # Форматируем дату модификации
                     try:
