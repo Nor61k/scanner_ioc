@@ -497,7 +497,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Severity</th>
                                 <th>Tags</th>
                                 <th>Meta</th>
-                                <th>Offset</th>
+                                <th>Match Details</th>
                 """
             elif scanner_name == 'memory_scanner':
                 html_content += """
@@ -564,7 +564,22 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     severity = finding.get('severity', 'medium')
                     tags = ', '.join(finding.get('tags', []))
                     meta = finding.get('meta', {})
-                    offset = finding.get('offset', 'N/A')
+                    strings = finding.get('strings', [])
+                    
+                    # Формируем детали срабатывания
+                    match_details = []
+                    for string_match in strings[:3]:  # Показываем первые 3 совпадения
+                        identifier = string_match.get('identifier', 'Unknown')
+                        offset = string_match.get('offset', 0)
+                        data = string_match.get('data', '')
+                        
+                        # Ограничиваем длину данных для читаемости
+                        if len(data) > 50:
+                            data = data[:50] + "..."
+                        
+                        match_details.append(f"{identifier}: {data} (offset: {offset})")
+                    
+                    match_details_text = "<br>".join(match_details) if match_details else "No string details"
                     
                     html_content += f"""
                                 <td><code>{file_path}</code></td>
@@ -572,7 +587,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><span class="badge severity-{severity}">{severity.upper()}</span></td>
                                 <td><small>{tags}</small></td>
                                 <td><small>{str(meta)}</small></td>
-                                <td><code>{offset}</code></td>
+                                <td><small>{match_details_text}</small></td>
                     """
                     
                 elif scanner_name == 'memory_scanner':
