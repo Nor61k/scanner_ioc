@@ -705,7 +705,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                         </tbody>
                     </table>
                     </div>
-                </div>
+                </div> """
             </div>
             
             # Формируем HTML для артефактов
