@@ -572,6 +572,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     file_modified = finding.get('file_modified', 'Unknown')
                     strings = finding.get('strings', [])
                     
+                    # Отладочная информация
+                    print(f"DEBUG: file_hash={file_hash}, file_owner={file_owner}, file_modified={file_modified}")
+                    
                     # Форматируем дату модификации
                     try:
                         if file_modified and file_modified != 'Unknown':
