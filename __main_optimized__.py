@@ -199,7 +199,7 @@ def aggregate_results(output_dir: str):
         generate_html_report(findings_dict, output_dir)
         
         # Очищаем промежуточные JSON файлы
-        # cleanup_json_files(output_dir)  # Временно отключено для отладки
+        cleanup_json_files(output_dir)
         
         # Очищаем артефакты
         cleanup_artifacts()
@@ -252,6 +252,25 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         }}
         .artifacts-table {{
             margin-top: 1rem;
+        }}
+        .table-responsive {{
+            overflow-x: auto;
+        }}
+        .table th {{
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 1;
+        }}
+        .table td {{
+            vertical-align: middle;
+        }}
+        .text-truncate {{
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }}
         .severity-high {{
             background-color: #ffeaa7 !important;
@@ -502,7 +521,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Hash</th>
                                 <th>Owner</th>
                                 <th>Modified</th>
-                                <th>Match Details</th>
+                                <th>Actions</th>
                 """
             elif scanner_name == 'memory_scanner':
                 html_content += """
@@ -572,7 +591,12 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     file_modified = finding.get('file_modified', 'Unknown')
                     strings = finding.get('strings', [])
                     
-
+                    # Пропускаем дубликаты - если файл уже был обработан
+                    if not hasattr(self, '_processed_files'):
+                        self._processed_files = set()
+                    if file_path in self._processed_files:
+                        continue
+                    self._processed_files.add(file_path)
                     
                     # Форматируем дату модификации
                     try:
@@ -626,8 +650,16 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     # Создаем уникальный ID для модального окна
                     modal_id = f"yara-modal-{hash(file_path)}"
                     
+                    # Красиво форматируем путь к файлу
+                    file_name = file_path.split('\\')[-1] if '\\' in file_path else file_path.split('/')[-1]
+                    
                     html_content += f"""
-                                <td><code>{file_path}</code></td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <code class="text-truncate" style="max-width: 200px;" title="{file_path}">{file_name}</code>
+                                        <small class="text-muted">{file_path}</small>
+                                    </div>
+                                </td>
                                 <td><strong>{rule_name}</strong></td>
                                 <td><span class="badge severity-{severity}">{severity.upper()}</span></td>
                                 <td><code>{file_hash[:16] if file_hash != 'Unknown' else 'Unknown'}...</code></td>
