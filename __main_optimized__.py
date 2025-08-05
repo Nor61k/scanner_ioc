@@ -383,8 +383,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         
         <div class="row">
             <div class="col-12">
-                <h1 class="text-center mb-4">
-                    <i class="fas fa-shield-alt"></i> JetCSIRT Scan Report
+                <h1 class="text-center mb-4 text-break">
+                    <span><i class="fas fa-shield-alt"></i> JetCSIRT Scan Report</span>
                 </h1>
             </div>
         </div>
