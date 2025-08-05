@@ -210,6 +210,20 @@ def aggregate_results(output_dir: str):
 def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
     """Генерация подробного HTML отчета"""
     try:
+        # Получаем системную информацию
+        import platform
+        import socket
+        import getpass
+        
+        hostname = platform.node()
+        try:
+            ip_address = socket.gethostbyname(hostname)
+        except:
+            ip_address = "Unknown"
+        
+        current_user = getpass.getuser()
+        build_number = "1.0.0"  # Можно вынести в конфиг
+        
         # Создаем оглавление
         toc_items = []
         for scanner_name, data in findings_dict.items():
@@ -251,6 +265,10 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             background-color: #d1ecf1 !important;
             color: #0c5460 !important;
         }}
+        .severity-none {{
+            background-color: #e9ecef !important;
+            color: #495057 !important;
+        }}
         .toc {{
             background-color: #e9ecef;
             padding: 1rem;
@@ -267,16 +285,77 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             border-radius: 0.5rem;
             margin-bottom: 1rem;
         }}
+        .system-info {{
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+        }}
+        .collapsible {{
+            cursor: pointer;
+        }}
+        .collapsible:hover {{
+            background-color: rgba(0,0,0,0.1);
+        }}
+        .collapsible-content {{
+            display: none;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+        }}
+        .collapsible-content.show {{
+            display: block;
+        }}
     </style>
 </head>
 <body>
     <div class="container mt-4">
+        <!-- Системная информация -->
+        <div class="system-info">
+            <div class="row">
+                <div class="col-12">
+                    <h2 class="text-center mb-3">
+                        <i class="fas fa-server"></i> System Information
+                    </h2>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Hostname:</strong><br>
+                    <code>{hostname}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>IP Address:</strong><br>
+                    <code>{ip_address}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>User:</strong><br>
+                    <code>{current_user}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>Build:</strong><br>
+                    <code>{build_number}</code>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <strong>Scan Started:</strong><br>
+                    <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>
+                </div>
+                <div class="col-md-6">
+                    <strong>Scan Completed:</strong><br>
+                    <code>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</code>
+                </div>
+            </div>
+        </div>
+        
         <div class="row">
             <div class="col-12">
                 <h1 class="text-center mb-4">
                     <i class="fas fa-shield-alt"></i> JetCSIRT Scan Report
                 </h1>
-                <p class="text-center text-muted">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
             </div>
         </div>
         
@@ -542,19 +621,17 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                         # Если data - это список, показываем количество элементов
                         count = len(data)
                         details = f"Found {count} items"
-                        risk_level = 'low' if count < 100 else 'medium' if count < 500 else 'high'
                     else:
                         # Если data - это словарь, показываем ключи
                         count = len(data.keys()) if isinstance(data, dict) else 0
                         details = f"Found {count} properties"
-                        risk_level = 'low'
                     
                     html_content += f"""
                                 <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
                                 <td><code>{finding_type}</code></td>
                                 <td><span class="badge bg-success">Collected</span></td>
                                 <td><small>{details}</small></td>
-                                <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
+                                <td><span class="badge severity-none">NONE</span></td>
                     """
                     
                 elif scanner_name == 'registry_scanner':
@@ -594,19 +671,24 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             
             <!-- Артефакты -->
             <div class="artifacts-section">
-                <h4><i class="fas fa-file-archive"></i> Artifacts</h4>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm artifacts-table">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Artifact</th>
-                                <th>Type</th>
-                                <th>Path</th>
-                                <th>Size</th>
-                                <th>Description</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <h4 class="collapsible" onclick="toggleSection('artifacts-{scanner_name}')">
+                    <i class="fas fa-file-archive"></i> Artifacts 
+                    <span class="badge bg-secondary">{len(artifacts)}</span>
+                    <i class="fas fa-chevron-down" id="artifacts-{scanner_name}-icon"></i>
+                </h4>
+                <div class="collapsible-content" id="artifacts-{scanner_name}">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm artifacts-table">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Artifact</th>
+                                    <th>Type</th>
+                                    <th>Path</th>
+                                    <th>Size</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
             """
             
             # Добавляем артефакты
@@ -619,18 +701,19 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     size_str = "Unknown"
                 
                 html_content += f"""
-                            <tr>
-                                <td><strong>{artifact_name}</strong></td>
-                                <td><span class="badge bg-info">File</span></td>
-                                <td><code>{artifact_path}</code></td>
-                                <td><small>{size_str}</small></td>
-                                <td><small>Collected during {scanner_name} scan</small></td>
-                            </tr>
+                                <tr>
+                                    <td><strong>{artifact_name}</strong></td>
+                                    <td><span class="badge bg-info">File</span></td>
+                                    <td><code>{artifact_path}</code></td>
+                                    <td><small>{size_str}</small></td>
+                                    <td><small>Collected during {scanner_name} scan</small></td>
+                                </tr>
                 """
             
             html_content += """
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -642,6 +725,36 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+    <script>
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId);
+            const icon = document.getElementById(sectionId + '-icon');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            } else {
+                content.classList.add('show');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            }
+        }
+        
+        // Показываем findings по умолчанию, скрываем artifacts
+        document.addEventListener('DOMContentLoaded', function() {
+            // Находим все секции findings и показываем их
+            const findingsSections = document.querySelectorAll('.findings-section');
+            findingsSections.forEach(section => {
+                const table = section.querySelector('.table-responsive');
+                if (table) {
+                    table.style.display = 'block';
+                }
+            });
+            
+            // Артефакты по умолчанию скрыты (уже в CSS)
+        });
+    </script>
 </body>
 </html>
         """
