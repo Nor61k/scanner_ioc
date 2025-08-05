@@ -7,7 +7,7 @@ rule generic_shellcode {
         description = "Generic shellcode detection"
         author = "RuScan"
         severity = "high"
-        tags = ["shellcode", "injection"]
+        tags = "shellcode,injection"
 
     strings:
         // NOP sled
@@ -35,7 +35,7 @@ rule process_injection {
         description = "Process injection detection"
         author = "RuScan"
         severity = "high"
-        tags = ["injection", "process"]
+        tags = "injection,process"
 
     strings:
         // Injection APIs
@@ -64,7 +64,7 @@ rule powershell_shellcode {
         description = "PowerShell shellcode detection"
         author = "RuScan"
         severity = "high"
-        tags = ["powershell", "shellcode"]
+        tags = "powershell,shellcode"
 
     strings:
         // PowerShell commands
@@ -86,7 +86,7 @@ rule reflective_dll {
         description = "Reflective DLL loading detection"
         author = "RuScan"
         severity = "high"
-        tags = ["dll", "injection"]
+        tags = "dll,injection"
 
     strings:
         // Characteristic strings
@@ -118,7 +118,7 @@ rule hollowing_detection {
         description = "Process Hollowing detection"
         author = "RuScan"
         severity = "high"
-        tags = ["hollowing", "injection"]
+        tags = "hollowing,injection"
 
     strings:
         // Process Hollowing APIs
