@@ -123,6 +123,62 @@ class YaraScanner(ScannerBase):
         self.max_ram = config.get("max_ram", None)
         self.load_yara_rules()
 
+    def _adapt_yara_rules_for_version(self, rules_dict: Dict[str, str]) -> Dict[str, str]:
+        """Адаптация YARA правил под версию YARA"""
+        try:
+            import yara
+            yara_version = yara.__version__
+            major_version = int(yara_version.split('.')[0])
+            
+            self.logger.info(f"YARA version: {yara_version}")
+            
+            # Если версия YARA < 4.0, адаптируем правила
+            if major_version < 4:
+                self.logger.info("YARA version < 4.0 detected, adapting rules...")
+                adapted_rules = {}
+                
+                for rule_name, rule_path in rules_dict.items():
+                    try:
+                        with open(rule_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        # Заменяем массивы на строки для совместимости
+                        import re
+                        
+                        # Заменяем tags = ["tag1", "tag2"] на tags = "tag1,tag2"
+                        content = re.sub(
+                            r'tags\s*=\s*\[([^\]]+)\]',
+                            lambda m: f'tags = "{",".join([tag.strip().strip("\'\"") for tag in m.group(1).split(",")])}"',
+                            content
+                        )
+                        
+                        # Заменяем severity = ["high"] на severity = "high"
+                        content = re.sub(
+                            r'severity\s*=\s*\[([^\]]+)\]',
+                            lambda m: f'severity = "{m.group(1).strip().strip("\'\"")}"',
+                            content
+                        )
+                        
+                        # Создаем временный файл с адаптированными правилами
+                        temp_rule_path = rule_path.replace('.yar', '_adapted.yar')
+                        with open(temp_rule_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        
+                        adapted_rules[rule_name] = temp_rule_path
+                        
+                    except Exception as e:
+                        self.logger.warning(f"Could not adapt rule {rule_name}: {e}")
+                        adapted_rules[rule_name] = rule_path
+                
+                return adapted_rules
+            else:
+                # Для YARA 4.0+ используем оригинальные правила
+                return rules_dict
+                
+        except Exception as e:
+            self.logger.warning(f"Error adapting YARA rules: {e}")
+            return rules_dict
+
     def load_yara_rules(self) -> None:
         """
         Загрузка YARA правил из директории
@@ -149,14 +205,29 @@ class YaraScanner(ScannerBase):
                         self.logger.error(f"Ошибка компиляции правила {rule_file}: {str(e)}")
                 
                 if rules_dict:
-                    self.yara_rules = yara.compile(filepaths=rules_dict)
-                    msg = f"[YARA] Загружено {len(rules_dict)} YARA правил (.yar) из {rules_dir}"
-                    print(msg)
-                    self.logger.info(msg)
-                    # print(f"[YARA] Всего правил загружено: {len(self.rules.rules)}")
-                    # self.logger.info(f"[YARA] Всего правил загружено: {len(self.rules.rules)}")
-                    rules_loaded = True
-                    break
+                    # Адаптируем правила под версию YARA
+                    adapted_rules = self._adapt_yara_rules_for_version(rules_dict)
+                    
+                    try:
+                        self.yara_rules = yara.compile(filepaths=adapted_rules)
+                        msg = f"[YARA] Загружено {len(adapted_rules)} YARA правил (.yar) из {rules_dir}"
+                        print(msg)
+                        self.logger.info(msg)
+                        rules_loaded = True
+                        break
+                    except Exception as compile_error:
+                        self.logger.error(f"Error compiling YARA rules: {compile_error}")
+                        # Попробуем загрузить без адаптации
+                        try:
+                            self.yara_rules = yara.compile(filepaths=rules_dict)
+                            msg = f"[YARA] Загружено {len(rules_dict)} YARA правил (.yar) из {rules_dir} (without adaptation)"
+                            print(msg)
+                            self.logger.info(msg)
+                            rules_loaded = True
+                            break
+                        except Exception as fallback_error:
+                            self.logger.error(f"Failed to load YARA rules even without adaptation: {fallback_error}")
+                            self.yara_rules = None
                     
             except Exception as e:
                 self.logger.error(f"Ошибка загрузки YARA правил из {rules_dir}: {str(e)}")
