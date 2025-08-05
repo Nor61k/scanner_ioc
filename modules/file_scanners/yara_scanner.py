@@ -345,6 +345,21 @@ class YaraScanner(ScannerBase):
                 return hashlib.md5(f.read(8192)).hexdigest()  # Первые 8KB
         except:
             return ""
+    
+    def _get_file_owner(self, file_path: str) -> str:
+        """Получает владельца файла"""
+        try:
+            import stat
+            import pwd
+            st = os.stat(file_path)
+            uid = st.st_uid
+            try:
+                owner = pwd.getpwuid(uid).pw_name
+                return owner
+            except KeyError:
+                return str(uid)
+        except Exception:
+            return "unknown"
 
     @lru_cache(maxsize=1000)
     def _get_cached_file_priority(self, file_path: str) -> int:
@@ -499,7 +514,11 @@ class YaraScanner(ScannerBase):
                     ],
                     "meta": match.meta,
                     "timestamp": datetime.now().isoformat(),
-                    "suspicion_score": self.get_file_suspicion_score(file_path)
+                    "suspicion_score": self.get_file_suspicion_score(file_path),
+                    "file_hash": self.get_file_hash(file_path),
+                    "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
+                    "file_modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat() if os.path.exists(file_path) else None,
+                    "file_owner": self._get_file_owner(file_path)
                 } for match in matches]
                 
         except Exception as e:

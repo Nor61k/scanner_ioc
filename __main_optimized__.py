@@ -499,8 +499,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>File</th>
                                 <th>Rule</th>
                                 <th>Severity</th>
-                                <th>Tags</th>
-                                <th>Meta</th>
+                                <th>Hash</th>
+                                <th>Owner</th>
+                                <th>Modified</th>
                                 <th>Match Details</th>
                 """
             elif scanner_name == 'memory_scanner':
@@ -566,9 +567,20 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     rule_name = finding.get('rule', 'Unknown')
                     file_path = finding.get('file', 'Unknown')
                     severity = finding.get('severity', 'medium')
-                    tags = ', '.join(finding.get('tags', []))
-                    meta = finding.get('meta', {})
+                    file_hash = finding.get('file_hash', 'Unknown')
+                    file_owner = finding.get('file_owner', 'Unknown')
+                    file_modified = finding.get('file_modified', 'Unknown')
                     strings = finding.get('strings', [])
+                    
+                    # Форматируем дату модификации
+                    try:
+                        if file_modified and file_modified != 'Unknown':
+                            modified_date = datetime.fromisoformat(file_modified.replace('Z', '+00:00'))
+                            formatted_date = modified_date.strftime('%Y-%m-%d %H:%M')
+                        else:
+                            formatted_date = 'Unknown'
+                    except:
+                        formatted_date = 'Unknown'
                     
                     # Формируем детали срабатывания как в Thor
                     match_details = []
@@ -602,6 +614,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     match_details_text = "<br>".join(match_details) if match_details else "No string details"
                     
                     # Добавляем описание угрозы из метаданных
+                    meta = finding.get('meta', {})
                     threat_description = meta.get('description', meta.get('threat', ''))
                     if threat_description:
                         match_details_text = f"<strong>Threat:</strong> {threat_description}<br><br>" + match_details_text
@@ -610,8 +623,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><code>{file_path}</code></td>
                                 <td><strong>{rule_name}</strong></td>
                                 <td><span class="badge severity-{severity}">{severity.upper()}</span></td>
-                                <td><small>{tags}</small></td>
-                                <td><small>{str(meta)}</small></td>
+                                <td><code>{file_hash[:16]}...</code></td>
+                                <td><small>{file_owner}</small></td>
+                                <td><small>{formatted_date}</small></td>
                                 <td><small>{match_details_text}</small></td>
                     """
                     
@@ -655,36 +669,70 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     # Определяем детали и примеры
                     if isinstance(data, list):
                         count = len(data)
-                        # Формируем примеры
-                        examples = []
-                        for i, item in enumerate(data[:3]):
-                            if finding_type == 'network_connections':
-                                local = f"{item.get('local_ip', '-')}:" + (str(item.get('local_port', '-')) if item.get('local_port') else '-')
-                                remote = f"{item.get('remote_ip', '-')}:" + (str(item.get('remote_port', '-')) if item.get('remote_port') else '-')
+                        # Формируем примеры для разных типов
+                        if finding_type == 'network_connections':
+                            # Для сетевых соединений
+                            local_examples = []
+                            remote_examples = []
+                            process_examples = []
+                            
+                            for item in data[:2]:  # Показываем первые 2 примера
+                                local_ip = item.get('local_ip', '-')
+                                local_port = item.get('local_port', '-')
+                                remote_ip = item.get('remote_ip', '-')
+                                remote_port = item.get('remote_port', '-')
                                 proc = item.get('process_name', '-')
-                                examples.append(f"{local} → {remote} ({proc})")
-                            elif finding_type == 'listening_ports':
+                                
+                                local_examples.append(f"{local_ip}:{local_port}")
+                                remote_examples.append(f"{remote_ip}:{remote_port}")
+                                process_examples.append(proc)
+                            
+                            local_addr = "<br>".join(local_examples) if local_examples else "N/A"
+                            remote_addr = "<br>".join(remote_examples) if remote_examples else "N/A"
+                            process_name = "<br>".join(process_examples) if process_examples else "N/A"
+                            status = "Active"
+                            risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
+                            
+                        elif finding_type == 'listening_ports':
+                            # Для слушающих портов
+                            ip_examples = []
+                            port_examples = []
+                            process_examples = []
+                            
+                            for item in data[:2]:  # Показываем первые 2 примера
                                 ip = item.get('ip', '-')
                                 port = item.get('port', '-')
                                 proc = item.get('process_name', '-')
-                                examples.append(f"{ip}:{port} ({proc})")
-                            elif finding_type == 'suspicious_activity':
-                                reason = item.get('reason', '-')
-                                conn = item.get('connection', {})
-                                local = f"{conn.get('local_ip', '-')}:" + (str(conn.get('local_port', '-')) if conn.get('local_port') else '-')
-                                remote = f"{conn.get('remote_ip', '-')}:" + (str(conn.get('remote_port', '-')) if conn.get('remote_port') else '-')
-                                examples.append(f"{local} → {remote} | {reason}")
-                            else:
-                                examples.append(str(item))
-                        details = f"{count} items. Примеры: " + ", ".join(examples)
-                        risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
+                                
+                                ip_examples.append(ip)
+                                port_examples.append(str(port))
+                                process_examples.append(proc)
+                            
+                            local_addr = "<br>".join(ip_examples) if ip_examples else "N/A"
+                            remote_addr = "<br>".join(port_examples) if port_examples else "N/A"
+                            process_name = "<br>".join(process_examples) if process_examples else "N/A"
+                            status = "Listening"
+                            risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
+                            
+                        else:
+                            # Для других типов
+                            local_addr = f"{count} items"
+                            remote_addr = "N/A"
+                            process_name = "N/A"
+                            status = "Unknown"
+                            risk_level = 'low'
                     else:
-                        details = str(data)
+                        local_addr = "N/A"
+                        remote_addr = "N/A"
+                        process_name = "N/A"
+                        status = "Unknown"
                         risk_level = 'low'
                     
                     html_content += f"""
-                                <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
-                                <td colspan=4><small>{details}</small></td>
+                                <td><code>{local_addr}</code></td>
+                                <td><code>{remote_addr}</code></td>
+                                <td><span class="badge bg-info">{status}</span></td>
+                                <td><small>{process_name}</small></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                     """
                     
