@@ -621,6 +621,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     if threat_description:
                         match_details_text = f"<strong>Threat:</strong> {threat_description}<br><br>" + match_details_text
                     
+
+                    
+                    # Создаем уникальный ID для модального окна
+                    modal_id = f"yara-modal-{hash(file_path)}"
+                    
                     html_content += f"""
                                 <td><code>{file_path}</code></td>
                                 <td><strong>{rule_name}</strong></td>
@@ -628,7 +633,68 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><code>{file_hash[:16] if file_hash != 'Unknown' else 'Unknown'}...</code></td>
                                 <td><small>{file_owner}</small></td>
                                 <td><small>{formatted_date}</small></td>
-                                <td><small>{match_details_text}</small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showYaraDetails('{modal_id}')">
+                                        <i class="fas fa-eye"></i> Details
+                                    </button>
+                                </td>
+                    """
+                    
+                    # Добавляем модальное окно с подробной информацией
+                    html_content += f"""
+                    <!-- Modal для {rule_name} -->
+                    <div class="modal fade" id="{modal_id}" tabindex="-1" aria-labelledby="{modal_id}-label" aria-hidden="true">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="{modal_id}-label">
+                                        <i class="fas fa-exclamation-triangle text-warning"></i> YARA Alert Details
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-file"></i> File Information</h6>
+                                            <table class="table table-sm">
+                                                <tr><td><strong>Path:</strong></td><td><code>{file_path}</code></td></tr>
+                                                <tr><td><strong>Hash (MD5):</strong></td><td><code>{file_hash}</code></td></tr>
+                                                <tr><td><strong>Owner:</strong></td><td><code>{file_owner}</code></td></tr>
+                                                <tr><td><strong>Modified:</strong></td><td><code>{formatted_date}</code></td></tr>
+                                                <tr><td><strong>Size:</strong></td><td><code>{finding.get('file_size', 'Unknown')} bytes</code></td></tr>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-shield-alt"></i> Rule Information</h6>
+                                            <table class="table table-sm">
+                                                <tr><td><strong>Rule:</strong></td><td><code>{rule_name}</code></td></tr>
+                                                <tr><td><strong>Severity:</strong></td><td><span class="badge severity-{severity}">{severity.upper()}</span></td></tr>
+                                                <tr><td><strong>Tags:</strong></td><td><code>{', '.join(finding.get('tags', []))}</code></td></tr>
+                                                <tr><td><strong>Timestamp:</strong></td><td><code>{finding.get('timestamp', 'Unknown')}</code></td></tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-12">
+                                            <h6><i class="fas fa-search"></i> Match Details</h6>
+                                            <div class="alert alert-info">
+                                                {match_details_text}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-3">
+                                        <div class="col-12">
+                                            <h6><i class="fas fa-info-circle"></i> Meta Information</h6>
+                                            <pre class="bg-light p-2 rounded"><code>{str(finding.get('meta', {}))}</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     """
                     
                 elif scanner_name == 'memory_scanner':
@@ -870,6 +936,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 icon.classList.add('fa-chevron-up');
                 icon.classList.add('rotated');
             }
+        }
+        
+        function showYaraDetails(modalId) {
+            const modal = new bootstrap.Modal(document.getElementById(modalId));
+            modal.show();
         }
         
         // Инициализация при загрузке страницы
