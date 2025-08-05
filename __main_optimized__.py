@@ -755,7 +755,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         </div>
     </div>
 </div>
-"""
+        </div>
+        """
 
         # Закрываем HTML
         html_content += """
