@@ -361,12 +361,12 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     <code>{ip_address}</code>
                 </div>
                 <div class="col-md-3">
-                    <strong>User:</strong><br>
-                    <code>{current_user}</code>
-                </div>
-                <div class="col-md-3">
                     <strong>Build:</strong><br>
                     <code>{build_number}</code>
+                </div>
+                <div class="col-md-3">
+                    <strong>User:</strong><br>
+                    <code>{current_user}</code>
                 </div>
             </div>
             <div class="row mt-3">
