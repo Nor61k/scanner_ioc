@@ -647,8 +647,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     
 
                     
-                    # Создаем уникальный ID для модального окна
-                    modal_id = f"yara-modal-{hash(file_path)}"
+                    # Создаем уникальный ID для сворачиваемого блока
+                    details_id = f"yara-details-{hash(file_path)}"
                     
                     # Красиво форматируем путь к файлу
                     file_name = file_path.split('\\')[-1] if '\\' in file_path else file_path.split('/')[-1]
@@ -666,67 +666,52 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><small>{file_owner}</small></td>
                                 <td><small>{formatted_date}</small></td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="showYaraDetails('{modal_id}')">
-                                        <i class="fas fa-eye"></i> Details
+                                    <button class="btn btn-sm btn-outline-primary" onclick="toggleDetails('{details_id}')">
+                                        <i class="fas fa-eye"></i> Показать детали
                                     </button>
                                 </td>
-                    """
-                    
-                    # Добавляем модальное окно с подробной информацией
-                    html_content += f"""
-                    <!-- Modal для {rule_name} -->
-                    <div class="modal fade" id="{modal_id}" tabindex="-1" aria-labelledby="{modal_id}-label" aria-hidden="true">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="{modal_id}-label">
-                                        <i class="fas fa-exclamation-triangle text-warning"></i> YARA Alert Details
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <h6><i class="fas fa-file"></i> File Information</h6>
-                                            <table class="table table-sm">
-                                                <tr><td><strong>Path:</strong></td><td><code>{file_path}</code></td></tr>
-                                                <tr><td><strong>Hash (MD5):</strong></td><td><code>{file_hash}</code></td></tr>
-                                                <tr><td><strong>Owner:</strong></td><td><code>{file_owner}</code></td></tr>
-                                                <tr><td><strong>Modified:</strong></td><td><code>{formatted_date}</code></td></tr>
-                                                <tr><td><strong>Size:</strong></td><td><code>{finding.get('file_size', 'Unknown')} bytes</code></td></tr>
-                                            </table>
+                            </tr>
+                            <tr>
+                                <td colspan="7" class="p-0">
+                                    <div class="collapsible-content" id="{details_id}">
+                                        <div class="row p-3">
+                                            <div class="col-md-6">
+                                                <h6><i class="fas fa-file"></i> Информация о файле</h6>
+                                                <table class="table table-sm">
+                                                    <tr><td><strong>Путь:</strong></td><td><code>{file_path}</code></td></tr>
+                                                    <tr><td><strong>Хеш (MD5):</strong></td><td><code>{file_hash}</code></td></tr>
+                                                    <tr><td><strong>Владелец:</strong></td><td><code>{file_owner}</code></td></tr>
+                                                    <tr><td><strong>Изменен:</strong></td><td><code>{formatted_date}</code></td></tr>
+                                                    <tr><td><strong>Размер:</strong></td><td><code>{finding.get('file_size', 'Unknown')} bytes</code></td></tr>
+                                                </table>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6><i class="fas fa-shield-alt"></i> Информация о правиле</h6>
+                                                <table class="table table-sm">
+                                                    <tr><td><strong>Правило:</strong></td><td><code>{rule_name}</code></td></tr>
+                                                    <tr><td><strong>Важность:</strong></td><td><span class="badge severity-{severity}">{severity.upper()}</span></td></tr>
+                                                    <tr><td><strong>Теги:</strong></td><td><code>{', '.join(finding.get('tags', []))}</code></td></tr>
+                                                    <tr><td><strong>Время:</strong></td><td><code>{finding.get('timestamp', 'Unknown')}</code></td></tr>
+                                                </table>
+                                            </div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <h6><i class="fas fa-shield-alt"></i> Rule Information</h6>
-                                            <table class="table table-sm">
-                                                <tr><td><strong>Rule:</strong></td><td><code>{rule_name}</code></td></tr>
-                                                <tr><td><strong>Severity:</strong></td><td><span class="badge severity-{severity}">{severity.upper()}</span></td></tr>
-                                                <tr><td><strong>Tags:</strong></td><td><code>{', '.join(finding.get('tags', []))}</code></td></tr>
-                                                <tr><td><strong>Timestamp:</strong></td><td><code>{finding.get('timestamp', 'Unknown')}</code></td></tr>
-                                            </table>
+                                        <div class="row px-3 pb-3">
+                                            <div class="col-12">
+                                                <h6><i class="fas fa-search"></i> Детали совпадения</h6>
+                                                <div class="alert alert-info">
+                                                    {match_details_text}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="row mt-3">
-                                        <div class="col-12">
-                                            <h6><i class="fas fa-search"></i> Match Details</h6>
-                                            <div class="alert alert-info">
-                                                {match_details_text}
+                                        <div class="row px-3 pb-3">
+                                            <div class="col-12">
+                                                <h6><i class="fas fa-info-circle"></i> Мета-информация</h6>
+                                                <pre class="bg-light p-2 rounded"><code>{str(finding.get('meta', {}))}</code></pre>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="row mt-3">
-                                        <div class="col-12">
-                                            <h6><i class="fas fa-info-circle"></i> Meta Information</h6>
-                                            <pre class="bg-light p-2 rounded"><code>{str(finding.get('meta', {}))}</code></pre>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                </td>
+                            </tr>
                     """
                     
                 elif scanner_name == 'memory_scanner':
@@ -970,9 +955,13 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             }
         }
         
-        function showYaraDetails(modalId) {
-            const modal = new bootstrap.Modal(document.getElementById(modalId));
-            modal.show();
+        function toggleDetails(detailsId) {
+            const content = document.getElementById(detailsId);
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+            } else {
+                content.classList.add('show');
+            }
         }
         
         // Инициализация при загрузке страницы
