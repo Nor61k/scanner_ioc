@@ -262,6 +262,15 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             top: 0;
             background-color: #f8f9fa;
             z-index: 1;
+            font-weight: bold;
+            text-align: center;
+            padding: 0.75rem;
+            border-bottom: 2px solid #dee2e6;
+        }}
+        .table-dark th {{
+            background-color: #343a40 !important;
+            color: white !important;
+            border-color: #454d55 !important;
         }}
         .table td {{
             vertical-align: middle;
