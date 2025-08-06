@@ -249,12 +249,26 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         }}
         .findings-table {{
             margin-top: 1rem;
+            width: 100%;
+            table-layout: fixed;
         }}
+        .findings-table th:nth-child(1) {{ width: 20%; }}  /* File */
+        .findings-table th:nth-child(2) {{ width: 20%; }}  /* Rule */
+        .findings-table th:nth-child(3) {{ width: 10%; }}  /* Severity */
+        .findings-table th:nth-child(4) {{ width: 15%; }}  /* Hash */
+        .findings-table th:nth-child(5) {{ width: 10%; }}  /* Owner */
+        .findings-table th:nth-child(6) {{ width: 10%; }}  /* Modified */
+        .findings-table th:nth-child(7) {{ width: 15%; }}  /* Actions */
         .artifacts-table {{
             margin-top: 1rem;
         }}
         .table-responsive {{
             overflow-x: auto;
+            max-width: 100%;
+        }}
+        .table {{
+            width: 100%;
+            min-width: 800px;
         }}
         .table th {{
             white-space: nowrap;
@@ -266,6 +280,12 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             text-align: center;
             padding: 0.75rem;
             border-bottom: 2px solid #dee2e6;
+            min-width: 120px;
+        }}
+        .table td {{
+            vertical-align: middle;
+            padding: 0.5rem;
+            word-wrap: break-word;
         }}
         .table-dark th {{
             background-color: #343a40 !important;
@@ -515,8 +535,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     <i class="fas fa-chevron-down collapsible-icon" id="findings-{scanner_name}-icon"></i>
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-sm findings-table">
+                    <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
+                        <table class="table table-bordered table-sm findings-table" style="min-width: 1000px;">
                         <thead class="table-dark">
                             <tr>
             """
