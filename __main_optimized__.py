@@ -252,13 +252,12 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             width: 100%;
             table-layout: fixed;
         }}
-        .findings-table th:nth-child(1) {{ width: 20%; }}  /* File */
-        .findings-table th:nth-child(2) {{ width: 20%; }}  /* Rule */
-        .findings-table th:nth-child(3) {{ width: 10%; }}  /* Severity */
-        .findings-table th:nth-child(4) {{ width: 15%; }}  /* Hash */
-        .findings-table th:nth-child(5) {{ width: 10%; }}  /* Owner */
-        .findings-table th:nth-child(6) {{ width: 10%; }}  /* Modified */
-        .findings-table th:nth-child(7) {{ width: 15%; }}  /* Actions */
+        .findings-table th:nth-child(1) {{ width: 40%; }}  /* Rule */
+        .findings-table th:nth-child(2) {{ width: 60%; }}  /* File */
+        .clickable-rule:hover, .clickable-file:hover {{
+            color: #0056b3 !important;
+            text-decoration: underline;
+        }}
         .artifacts-table {{
             margin-top: 1rem;
         }}
@@ -536,7 +535,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                        <table class="table table-bordered table-sm findings-table" style="min-width: 1000px;">
+                        <table class="table table-bordered table-sm findings-table" style="min-width: 600px;">
                         <thead class="table-dark">
                             <tr>
             """
@@ -544,13 +543,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             # Определяем заголовки таблицы в зависимости от типа сканера
             if scanner_name == 'yara_scanner':
                 html_content += """
-                                <th>File</th>
                                 <th>Rule</th>
-                                <th>Severity</th>
-                                <th>Hash</th>
-                                <th>Owner</th>
-                                <th>Modified</th>
-                                <th>Actions</th>
+                                <th>File</th>
                 """
             elif scanner_name == 'memory_scanner':
                 html_content += """
@@ -684,24 +678,20 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     
                     html_content += f"""
                                 <td>
+                                    <strong class="clickable-rule" onclick="toggleDetails('{details_id}')" style="cursor: pointer; color: #007bff;">
+                                        {rule_name}
+                                        <i class="fas fa-chevron-down" style="margin-left: 5px;"></i>
+                                    </strong>
+                                </td>
+                                <td>
                                     <div class="d-flex flex-column">
-                                        <code class="text-truncate" style="max-width: 200px;" title="{file_path}">{file_name}</code>
+                                        <code class="text-truncate clickable-file" onclick="toggleDetails('{details_id}')" style="cursor: pointer; color: #007bff; max-width: 300px;" title="{file_path}">{file_name}</code>
                                         <small class="text-muted">{file_path}</small>
                                     </div>
                                 </td>
-                                <td><strong>{rule_name}</strong></td>
-                                <td><span class="badge severity-{severity}">{severity.upper()}</span></td>
-                                <td><code>{file_hash[:16] if file_hash != 'Unknown' else 'Unknown'}...</code></td>
-                                <td><small>{file_owner}</small></td>
-                                <td><small>{formatted_date}</small></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="toggleDetails('{details_id}')">
-                                        <i class="fas fa-eye"></i> Показать детали
-                                    </button>
-                                </td>
                             </tr>
                             <tr>
-                                <td colspan="7" class="p-0">
+                                <td colspan="2" class="p-0">
                                     <div class="collapsible-content" id="{details_id}">
                                         <div class="row p-3">
                                             <div class="col-md-6">
@@ -986,10 +976,18 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         
         function toggleDetails(detailsId) {
             const content = document.getElementById(detailsId);
+            const ruleElement = content.previousElementSibling.querySelector('.clickable-rule');
+            const fileElement = content.previousElementSibling.querySelector('.clickable-file');
+            const icon = ruleElement.querySelector('i');
+            
             if (content.classList.contains('show')) {
                 content.classList.remove('show');
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
             } else {
                 content.classList.add('show');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
             }
         }
         
