@@ -239,6 +239,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
     <meta charset="UTF-8">
     <title>JetCSIRT Scan Report</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
     <style>
         .scanner-section {{
             margin-bottom: 3rem;
@@ -375,9 +376,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             border-radius: 0.25rem;
             margin-top: 0.5rem;
             border-left: 3px solid #007bff;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
         .collapsible-content.show {{
-            display: block;
+            display: block !important;
         }}
         .collapsible-icon {{
             transition: transform 0.2s;
@@ -671,7 +674,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
 
                     
                     # Создаем уникальный ID для сворачиваемого блока
-                    details_id = f"yara-details-{hash(file_path)}"
+                    details_id = f"yara-details-{abs(hash(file_path))}"
                     
                     # Красиво форматируем путь к файлу
                     file_name = file_path.split('\\')[-1] if '\\' in file_path else file_path.split('/')[-1]
@@ -682,6 +685,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                         {rule_name}
                                         <i class="fas fa-chevron-down" style="margin-left: 5px;"></i>
                                     </strong>
+                                    <button onclick="testClick()" style="margin-left: 10px; font-size: 10px;">Test</button>
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column">
@@ -955,7 +959,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
     <script>
         function toggleSection(sectionId) {
             const content = document.getElementById(sectionId);
@@ -975,20 +979,46 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         }
         
         function toggleDetails(detailsId) {
+            console.log('toggleDetails called with:', detailsId);
             const content = document.getElementById(detailsId);
-            const ruleElement = content.previousElementSibling.querySelector('.clickable-rule');
-            const fileElement = content.previousElementSibling.querySelector('.clickable-file');
-            const icon = ruleElement.querySelector('i');
+            if (!content) {
+                console.error('Element not found:', detailsId);
+                return;
+            }
+            
+            console.log('Content element found:', content);
+            console.log('Current classes:', content.classList.toString());
+            
+            // Находим родительскую строку и иконку
+            const parentRow = content.parentElement.previousElementSibling;
+            const icon = parentRow ? parentRow.querySelector('i') : null;
+            
+            console.log('Parent row:', parentRow);
+            console.log('Icon found:', icon);
             
             if (content.classList.contains('show')) {
+                console.log('Hiding content');
                 content.classList.remove('show');
-                icon.classList.remove('fa-chevron-up');
-                icon.classList.add('fa-chevron-down');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                }
             } else {
+                console.log('Showing content');
                 content.classList.add('show');
-                icon.classList.remove('fa-chevron-down');
-                icon.classList.add('fa-chevron-up');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
             }
+            
+            console.log('Final classes:', content.classList.toString());
+        }
+        
+        // Простая тестовая функция
+        function testClick() {
+            console.log('Test click function called!');
+            alert('JavaScript is working!');
         }
         
         // Инициализация при загрузке страницы
