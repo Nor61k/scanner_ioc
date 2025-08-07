@@ -575,32 +575,32 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 """
             elif scanner_name == 'memory_scanner':
                 html_content += """
-                                <th>Process</th>
+                                <th>Proc</th>
                                 <th>PID</th>
                                 <th>Rule</th>
-                                <th>Severity</th>
-                                <th>Memory Region</th>
+                                <th>Sev</th>
+                                <th>Region</th>
                                 <th>Offset</th>
                 """
             elif scanner_name == 'ioc_scanner':
                 html_content += """
                                 <th>Type</th>
                                 <th>Value</th>
-                                <th>Source</th>
-                                <th>Confidence</th>
-                                <th>Description</th>
+                                <th>Src</th>
+                                <th>Conf</th>
+                                <th>Desc</th>
                 """
             elif scanner_name == 'network_scanner':
                 html_content += """
-                                <th>Local</th>
-                                <th>Remote</th>
-                                <th>Process</th>
+                                <th>Src IP</th>
+                                <th>Dst IP</th>
+                                <th>Proc</th>
                                 <th>Status</th>
                                 <th>Risk</th>
                 """
             elif scanner_name == 'system_scanner':
                 html_content += """
-                                <th>Component</th>
+                                <th>Comp</th>
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Details</th>
@@ -611,8 +611,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Key</th>
                                 <th>Value</th>
                                 <th>Type</th>
-                                <th>Risk Level</th>
-                                <th>Description</th>
+                                <th>Risk</th>
+                                <th>Desc</th>
                 """
             else:
                 html_content += """
