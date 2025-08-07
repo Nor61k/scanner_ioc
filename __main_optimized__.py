@@ -269,6 +269,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         .table {{
             width: 100%;
             min-width: 600px;
+            font-size: 0.875rem;
         }}
         .table th {{
             white-space: nowrap;
@@ -278,33 +279,36 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             z-index: 1;
             font-weight: bold;
             text-align: center;
-            padding: 0.5rem;
+            padding: 0.375rem;
             border-bottom: 2px solid #dee2e6;
             min-width: 80px;
             max-width: 200px;
+            font-size: 0.8rem;
         }}
         .table td {{
             vertical-align: middle;
-            padding: 0.5rem;
+            padding: 0.375rem;
             word-wrap: break-word;
             max-width: 200px;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-size: 0.8rem;
         }}
         .network-table {{
             min-width: 250px !important;
             max-width: 600px !important;
+            font-size: 0.75rem !important;
         }}
         .network-table th {{
             min-width: 30px !important;
             max-width: 100px !important;
-            padding: 0.2rem !important;
-            font-size: 0.75rem !important;
+            padding: 0.25rem !important;
+            font-size: 0.7rem !important;
         }}
         .network-table td {{
             max-width: 100px !important;
-            font-size: 0.75rem !important;
-            padding: 0.2rem !important;
+            font-size: 0.7rem !important;
+            padding: 0.25rem !important;
             word-break: break-all !important;
         }}
         .table-dark th {{
@@ -558,7 +562,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                        <table class="table table-bordered table-sm findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
+                        <table class="table table-sm table-striped table-bordered align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
                         <thead class="table-dark">
                             <tr>
             """
