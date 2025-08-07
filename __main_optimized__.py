@@ -568,7 +568,6 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 """
             elif scanner_name == 'network_scanner':
                 html_content += """
-                                <th>Connection</th>
                                 <th>Local Address</th>
                                 <th>Remote Address</th>
                                 <th>Status</th>
@@ -615,6 +614,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     file_hash = finding.get('file_hash', 'Unknown')
                     file_owner = finding.get('file_owner', 'Unknown')
                     file_modified = finding.get('file_modified', 'Unknown')
+                    file_created = finding.get('file_created', 'Unknown')
                     strings = finding.get('strings', [])
                     
                     # Пропускаем дубликаты - если файл уже был обработан
@@ -634,42 +634,70 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     except:
                         formatted_date = 'Unknown'
                     
-                    # Формируем детали срабатывания как в Thor
+                    # Форматируем дату создания
+                    try:
+                        if file_created and file_created != 'Unknown':
+                            created_date = datetime.fromisoformat(file_created.replace('Z', '+00:00'))
+                            formatted_created_date = created_date.strftime('%Y-%m-%d %H:%M')
+                        else:
+                            formatted_created_date = 'Unknown'
+                    except:
+                        formatted_created_date = 'Unknown'
+                    
+                    # Формируем детали срабатывания
                     match_details = []
                     for i, string_match in enumerate(strings[:5], 1):  # Показываем первые 5 совпадений
                         identifier = string_match.get('identifier', 'Unknown')
                         offset = string_match.get('offset', 0)
                         data = string_match.get('data', '')
                         
-                        # Конвертируем hex в читаемый вид
+                        # Обрабатываем данные в зависимости от типа
                         try:
-                            if data.startswith('0x') or all(c in '0123456789abcdefABCDEF' for c in data):
-                                # Это hex данные, конвертируем в ASCII
-                                hex_data = data.replace('0x', '')
-                                if len(hex_data) % 2 == 0:
-                                    ascii_data = bytes.fromhex(hex_data).decode('utf-8', errors='ignore')
-                                    data_display = f"{data} ({ascii_data})"
+                            if isinstance(data, str):
+                                if data.startswith('0x') or all(c in '0123456789abcdefABCDEF' for c in data):
+                                    # Это hex данные, конвертируем в ASCII
+                                    hex_data = data.replace('0x', '')
+                                    if len(hex_data) % 2 == 0:
+                                        try:
+                                            ascii_data = bytes.fromhex(hex_data).decode('utf-8', errors='ignore')
+                                            data_display = f"{data} ({ascii_data})"
+                                        except:
+                                            data_display = data
+                                    else:
+                                        data_display = data
                                 else:
                                     data_display = data
+                            elif isinstance(data, bytes):
+                                # Байтовые данные
+                                try:
+                                    ascii_data = data.decode('utf-8', errors='ignore')
+                                    hex_data = data.hex()
+                                    data_display = f"0x{hex_data} ({ascii_data})"
+                                except:
+                                    data_display = f"0x{data.hex()}"
                             else:
-                                data_display = data
+                                data_display = str(data)
                         except:
-                            data_display = data
+                            data_display = str(data)
                         
                         # Ограничиваем длину данных для читаемости
-                        if len(data_display) > 100:
-                            data_display = data_display[:100] + "..."
+                        if len(data_display) > 150:
+                            data_display = data_display[:150] + "..."
                         
-                        # Форматируем как в Thor: "identifier: data at offset"
+                        # Форматируем детали совпадения
                         match_details.append(f"<strong>{identifier}:</strong> {data_display} <code>at 0x{offset:x}</code>")
                     
-                    match_details_text = "<br>".join(match_details) if match_details else "No string details"
+                    match_details_text = "<br>".join(match_details) if match_details else "Нет деталей совпадения"
+                    
+                    # Добавляем отладочную информацию о количестве совпадений
+                    if strings:
+                        match_details_text = f"<strong>Найдено совпадений:</strong> {len(strings)}<br><br>" + match_details_text
                     
                     # Добавляем описание угрозы из метаданных
                     meta = finding.get('meta', {})
                     threat_description = meta.get('description', meta.get('threat', ''))
                     if threat_description:
-                        match_details_text = f"<strong>Threat:</strong> {threat_description}<br><br>" + match_details_text
+                        match_details_text = f"<strong>Описание:</strong> {threat_description}<br><br>" + match_details_text
                     
 
                     
@@ -685,7 +713,6 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                         {rule_name}
                                         <i class="fas fa-chevron-down" style="margin-left: 5px;"></i>
                                     </strong>
-                                    <button onclick="testClick()" style="margin-left: 10px; font-size: 10px;">Test</button>
                                 </td>
                                 <td>
                                     <div class="d-flex flex-column">
@@ -698,38 +725,46 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td colspan="2" class="p-0">
                                     <div class="collapsible-content" id="{details_id}">
                                         <div class="row p-3">
-                                            <div class="col-md-6">
+                                            <div class="col-md-12">
                                                 <h6><i class="fas fa-file"></i> Информация о файле</h6>
                                                 <table class="table table-sm">
                                                     <tr><td><strong>Путь:</strong></td><td><code>{file_path}</code></td></tr>
                                                     <tr><td><strong>Хеш (MD5):</strong></td><td><code>{file_hash}</code></td></tr>
                                                     <tr><td><strong>Владелец:</strong></td><td><code>{file_owner}</code></td></tr>
+                                                    <tr><td><strong>Создан:</strong></td><td><code>{formatted_created_date}</code></td></tr>
                                                     <tr><td><strong>Изменен:</strong></td><td><code>{formatted_date}</code></td></tr>
                                                     <tr><td><strong>Размер:</strong></td><td><code>{finding.get('file_size', 'Unknown')} bytes</code></td></tr>
                                                 </table>
                                             </div>
-                                            <div class="col-md-6">
+                                        </div>
+                                        <div class="row px-3 pb-3">
+                                            <div class="col-12">
                                                 <h6><i class="fas fa-shield-alt"></i> Информация о правиле</h6>
                                                 <table class="table table-sm">
                                                     <tr><td><strong>Правило:</strong></td><td><code>{rule_name}</code></td></tr>
                                                     <tr><td><strong>Важность:</strong></td><td><span class="badge severity-{severity}">{severity.upper()}</span></td></tr>
                                                     <tr><td><strong>Теги:</strong></td><td><code>{', '.join(finding.get('tags', []))}</code></td></tr>
-                                                    <tr><td><strong>Время:</strong></td><td><code>{finding.get('timestamp', 'Unknown')}</code></td></tr>
                                                 </table>
                                             </div>
                                         </div>
                                         <div class="row px-3 pb-3">
                                             <div class="col-12">
-                                                <h6><i class="fas fa-search"></i> Детали совпадения</h6>
-                                                <div class="alert alert-info">
-                                                    {match_details_text}
-                                                </div>
+                                                <h6><i class="fas fa-info-circle"></i> Мета-информация</h6>
+                                                <table class="table table-sm">
+                                                    <tr><td><strong>Описание:</strong></td><td><code>{finding.get('meta', {}).get('description', 'Не указано')}</code></td></tr>
+                                                    <tr><td><strong>Оценка:</strong></td><td><code>{finding.get('meta', {}).get('score', 'Не указано')}</code></td></tr>
+                                                    <tr><td><strong>Дата:</strong></td><td><code>{finding.get('meta', {}).get('date', 'Не указано')}</code></td></tr>
+                                                    <tr><td><strong>Автор:</strong></td><td><code>{finding.get('meta', {}).get('author', 'Не указано')}</code></td></tr>
+                                                </table>
                                             </div>
                                         </div>
                                         <div class="row px-3 pb-3">
                                             <div class="col-12">
-                                                <h6><i class="fas fa-info-circle"></i> Мета-информация</h6>
-                                                <pre class="bg-light p-2 rounded"><code>{str(finding.get('meta', {}))}</code></pre>
+                                                <h6><i class="fas fa-search"></i> Технические детали совпадения</h6>
+                                                <div class="alert alert-info">
+                                                    <p><strong>Правило сработало на следующие элементы:</strong></p>
+                                                    {match_details_text}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -784,7 +819,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             remote_examples = []
                             process_examples = []
                             
-                            for item in data[:2]:  # Показываем первые 2 примера
+                            for item in data[:3]:  # Показываем первые 3 примера
                                 local_ip = item.get('local_ip', '-')
                                 local_port = item.get('local_port', '-')
                                 remote_ip = item.get('remote_ip', '-')
@@ -798,7 +833,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             local_addr = "<br>".join(local_examples) if local_examples else "N/A"
                             remote_addr = "<br>".join(remote_examples) if remote_examples else "N/A"
                             process_name = "<br>".join(process_examples) if process_examples else "N/A"
-                            status = "Active"
+                            status = f"Active ({count} connections)"
                             risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
                             
                         elif finding_type == 'listening_ports':
@@ -807,7 +842,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             port_examples = []
                             process_examples = []
                             
-                            for item in data[:2]:  # Показываем первые 2 примера
+                            for item in data[:3]:  # Показываем первые 3 примера
                                 ip = item.get('ip', '-')
                                 port = item.get('port', '-')
                                 proc = item.get('process_name', '-')
@@ -819,7 +854,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             local_addr = "<br>".join(ip_examples) if ip_examples else "N/A"
                             remote_addr = "<br>".join(port_examples) if port_examples else "N/A"
                             process_name = "<br>".join(process_examples) if process_examples else "N/A"
-                            status = "Listening"
+                            status = f"Listening ({count} ports)"
                             risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
                             
                         else:

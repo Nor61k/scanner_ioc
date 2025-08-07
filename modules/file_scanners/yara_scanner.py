@@ -443,6 +443,7 @@ class YaraScanner(ScannerBase):
                     "file_hash": self.get_file_hash(file_path),
                     "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
                     "file_modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat() if os.path.exists(file_path) else None,
+                    "file_created": datetime.fromtimestamp(os.path.getctime(file_path)).isoformat() if os.path.exists(file_path) else None,
                     "file_owner": self._get_file_owner(file_path)
                 }
                 findings.append(finding)
@@ -522,6 +523,7 @@ class YaraScanner(ScannerBase):
                     "file_hash": self.get_file_hash(file_path),
                     "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
                     "file_modified": datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat() if os.path.exists(file_path) else None,
+                    "file_created": datetime.fromtimestamp(os.path.getctime(file_path)).isoformat() if os.path.exists(file_path) else None,
                     "file_owner": self._get_file_owner(file_path)
                 } for match in matches]
                 
