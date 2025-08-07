@@ -562,7 +562,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                        <table class="table table-sm table-striped table-bordered align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
+                        <table class="table table-sm table-striped table-hover align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
                         <thead class="table-dark">
                             <tr>
             """
