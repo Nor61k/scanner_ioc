@@ -292,15 +292,20 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             text-overflow: ellipsis;
         }}
         .network-table {{
-            min-width: 400px !important;
+            min-width: 300px !important;
+            max-width: 800px !important;
         }}
         .network-table th {{
-            min-width: 60px !important;
-            max-width: 150px !important;
+            min-width: 40px !important;
+            max-width: 120px !important;
+            padding: 0.25rem !important;
+            font-size: 0.8rem !important;
         }}
         .network-table td {{
-            max-width: 150px !important;
-            font-size: 0.9rem;
+            max-width: 120px !important;
+            font-size: 0.8rem !important;
+            padding: 0.25rem !important;
+            word-break: break-all !important;
         }}
         .table-dark th {{
             background-color: #343a40 !important;
@@ -847,9 +852,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 remote_examples.append(f"{remote_ip}:{remote_port}")
                                 process_examples.append(proc)
                             
-                            local_addr = "<br>".join(local_examples) if local_examples else "N/A"
-                            remote_addr = "<br>".join(remote_examples) if remote_examples else "N/A"
-                            process_name = "<br>".join(process_examples) if process_examples else "N/A"
+                            local_addr = " | ".join(local_examples) if local_examples else "N/A"
+                            remote_addr = " | ".join(remote_examples) if remote_examples else "N/A"
+                            process_name = " | ".join(process_examples) if process_examples else "N/A"
                             status = f"Active ({count} connections)"
                             risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
                             
@@ -868,9 +873,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 port_examples.append(str(port))
                                 process_examples.append(proc)
                             
-                            local_addr = "<br>".join(ip_examples) if ip_examples else "N/A"
-                            remote_addr = "<br>".join(port_examples) if port_examples else "N/A"
-                            process_name = "<br>".join(process_examples) if process_examples else "N/A"
+                            local_addr = " | ".join(ip_examples) if ip_examples else "N/A"
+                            remote_addr = " | ".join(port_examples) if port_examples else "N/A"
+                            process_name = " | ".join(process_examples) if process_examples else "N/A"
                             status = f"Listening ({count} ports)"
                             risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
                             
