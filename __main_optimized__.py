@@ -268,7 +268,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         }}
         .table {{
             width: 100%;
-            min-width: 800px;
+            min-width: 600px;
         }}
         .table th {{
             white-space: nowrap;
@@ -278,14 +278,29 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             z-index: 1;
             font-weight: bold;
             text-align: center;
-            padding: 0.75rem;
+            padding: 0.5rem;
             border-bottom: 2px solid #dee2e6;
-            min-width: 120px;
+            min-width: 80px;
+            max-width: 200px;
         }}
         .table td {{
             vertical-align: middle;
             padding: 0.5rem;
             word-wrap: break-word;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .network-table {{
+            min-width: 400px !important;
+        }}
+        .network-table th {{
+            min-width: 60px !important;
+            max-width: 150px !important;
+        }}
+        .network-table td {{
+            max-width: 150px !important;
+            font-size: 0.9rem;
         }}
         .table-dark th {{
             background-color: #343a40 !important;
@@ -538,7 +553,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                        <table class="table table-bordered table-sm findings-table" style="min-width: 600px;">
+                        <table class="table table-bordered table-sm findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
                         <thead class="table-dark">
                             <tr>
             """
@@ -809,8 +824,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     finding_type = finding.get('type', 'Unknown')
                     data = finding.get('data', [])
                     
-                    # Отладочная информация
-                    print(f"DEBUG: Network scanner finding_type={finding_type}, data_type={type(data)}, data_length={len(data) if isinstance(data, list) else 'N/A'}")
+
                     
                     # Определяем детали и примеры
                     if isinstance(data, list) and len(data) > 0:
