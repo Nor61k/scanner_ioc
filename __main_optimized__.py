@@ -809,8 +809,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     finding_type = finding.get('type', 'Unknown')
                     data = finding.get('data', [])
                     
+                    # Отладочная информация
+                    print(f"DEBUG: Network scanner finding_type={finding_type}, data_type={type(data)}, data_length={len(data) if isinstance(data, list) else 'N/A'}")
+                    
                     # Определяем детали и примеры
-                    if isinstance(data, list):
+                    if isinstance(data, list) and len(data) > 0:
                         count = len(data)
                         # Формируем примеры для разных типов
                         if finding_type == 'network_connections':
@@ -820,11 +823,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             process_examples = []
                             
                             for item in data[:3]:  # Показываем первые 3 примера
-                                local_ip = item.get('local_ip', '-')
-                                local_port = item.get('local_port', '-')
-                                remote_ip = item.get('remote_ip', '-')
-                                remote_port = item.get('remote_port', '-')
-                                proc = item.get('process_name', '-')
+                                local_ip = item.get('local_ip', 'N/A')
+                                local_port = item.get('local_port', 'N/A')
+                                remote_ip = item.get('remote_ip', 'N/A')
+                                remote_port = item.get('remote_port', 'N/A')
+                                proc = item.get('process_name', 'N/A')
                                 
                                 local_examples.append(f"{local_ip}:{local_port}")
                                 remote_examples.append(f"{remote_ip}:{remote_port}")
@@ -843,9 +846,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             process_examples = []
                             
                             for item in data[:3]:  # Показываем первые 3 примера
-                                ip = item.get('ip', '-')
-                                port = item.get('port', '-')
-                                proc = item.get('process_name', '-')
+                                ip = item.get('ip', 'N/A')
+                                port = item.get('port', 'N/A')
+                                proc = item.get('process_name', 'N/A')
                                 
                                 ip_examples.append(ip)
                                 port_examples.append(str(port))
@@ -865,10 +868,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             status = "Unknown"
                             risk_level = 'low'
                     else:
+                        # Если данных нет или они в неправильном формате
                         local_addr = "N/A"
                         remote_addr = "N/A"
                         process_name = "N/A"
-                        status = "Unknown"
+                        status = "No data"
                         risk_level = 'low'
                     
                     html_content += f"""
