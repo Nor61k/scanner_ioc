@@ -292,19 +292,19 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             text-overflow: ellipsis;
         }}
         .network-table {{
-            min-width: 300px !important;
-            max-width: 800px !important;
+            min-width: 250px !important;
+            max-width: 600px !important;
         }}
         .network-table th {{
-            min-width: 40px !important;
-            max-width: 120px !important;
-            padding: 0.25rem !important;
-            font-size: 0.8rem !important;
+            min-width: 30px !important;
+            max-width: 100px !important;
+            padding: 0.2rem !important;
+            font-size: 0.75rem !important;
         }}
         .network-table td {{
-            max-width: 120px !important;
-            font-size: 0.8rem !important;
-            padding: 0.25rem !important;
+            max-width: 100px !important;
+            font-size: 0.75rem !important;
+            padding: 0.2rem !important;
             word-break: break-all !important;
         }}
         .table-dark th {{
@@ -588,11 +588,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 """
             elif scanner_name == 'network_scanner':
                 html_content += """
-                                <th>Local Address</th>
-                                <th>Remote Address</th>
-                                <th>Status</th>
+                                <th>Local</th>
+                                <th>Remote</th>
                                 <th>Process</th>
-                                <th>Risk Level</th>
+                                <th>Status</th>
+                                <th>Risk</th>
                 """
             elif scanner_name == 'system_scanner':
                 html_content += """
@@ -840,6 +840,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             local_examples = []
                             remote_examples = []
                             process_examples = []
+                            status_examples = []
                             
                             for item in data[:3]:  # Показываем первые 3 примера
                                 local_ip = item.get('local_ip', 'N/A')
@@ -847,15 +848,18 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 remote_ip = item.get('remote_ip', 'N/A')
                                 remote_port = item.get('remote_port', 'N/A')
                                 proc = item.get('process_name', 'N/A')
+                                pid = item.get('pid', 'N/A')
+                                conn_status = item.get('status', 'N/A')
                                 
                                 local_examples.append(f"{local_ip}:{local_port}")
                                 remote_examples.append(f"{remote_ip}:{remote_port}")
-                                process_examples.append(proc)
+                                process_examples.append(f"{proc}({pid})" if pid != 'N/A' else proc)
+                                status_examples.append(conn_status)
                             
                             local_addr = " | ".join(local_examples) if local_examples else "N/A"
                             remote_addr = " | ".join(remote_examples) if remote_examples else "N/A"
                             process_name = " | ".join(process_examples) if process_examples else "N/A"
-                            status = f"Active ({count} connections)"
+                            status = " | ".join(status_examples) if status_examples else f"Active ({count})"
                             risk_level = 'low' if count < 10 else 'medium' if count < 100 else 'high'
                             
                         elif finding_type == 'listening_ports':
@@ -868,10 +872,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 ip = item.get('ip', 'N/A')
                                 port = item.get('port', 'N/A')
                                 proc = item.get('process_name', 'N/A')
+                                pid = item.get('pid', 'N/A')
                                 
                                 ip_examples.append(ip)
                                 port_examples.append(str(port))
-                                process_examples.append(proc)
+                                process_examples.append(f"{proc}({pid})" if pid != 'N/A' else proc)
                             
                             local_addr = " | ".join(ip_examples) if ip_examples else "N/A"
                             remote_addr = " | ".join(port_examples) if port_examples else "N/A"
@@ -897,8 +902,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     html_content += f"""
                                 <td><code>{local_addr}</code></td>
                                 <td><code>{remote_addr}</code></td>
-                                <td><span class="badge bg-info">{status}</span></td>
                                 <td><small>{process_name}</small></td>
+                                <td><span class="badge bg-info">{status}</span></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                     """
                     
