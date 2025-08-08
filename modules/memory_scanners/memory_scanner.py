@@ -140,7 +140,7 @@ class MemoryScanner(ScannerBase):
                     self.logger.error(f"Error compiling YARA rules: {compile_error}")
                     # Попробуем загрузить без адаптации
                     try:
-                        self.yara_rules = yara.compile(filepaths=rules_dict)
+                self.yara_rules = yara.compile(filepaths=rules_dict)
                         self.logger.info(f"Loaded {len(rules_dict)} memory YARA rules (without adaptation)")
                     except Exception as fallback_error:
                         self.logger.error(f"Failed to load YARA rules even without adaptation: {fallback_error}")
@@ -327,7 +327,7 @@ class MemoryScanner(ScannerBase):
             self._findings = findings
             
             return findings
-            
+
         except Exception as e:
             self.logger.error(f"Error in memory scan: {str(e)}")
             
@@ -347,13 +347,13 @@ class MemoryScanner(ScannerBase):
                     chunk_findings = self._scan_memory_chunk(process, chunk)
                     if chunk_findings:
                         findings.extend(chunk_findings)
-                except Exception as e:
+                            except Exception as e:
                     self.logger.debug(f"Error scanning memory chunk: {str(e)}")
                     continue
-                    
+
         except Exception as e:
             self.logger.debug(f"Error scanning process {process.name()}: {str(e)}")
-            
+
         return findings
 
     def is_pe_header(self, data: bytes) -> bool:
@@ -419,20 +419,20 @@ class MemoryScanner(ScannerBase):
                 )
 
                 if self.create_memory_dump(pid, dump_path):
-                    # Сохраняем метаданные
-                    metadata = {
-                        'scanner': 'memory',
-                        'pid': pid,
-                        'process_name': finding.get('name'),
-                        'findings': finding.get('findings', []),
-                        'scan_time': self.start_time.isoformat() if self.start_time else None
-                    }
+                # Сохраняем метаданные
+                metadata = {
+                    'scanner': 'memory',
+                    'pid': pid,
+                    'process_name': finding.get('name'),
+                    'findings': finding.get('findings', []),
+                    'scan_time': self.start_time.isoformat() if self.start_time else None
+                }
 
-                    self.artifact_collector.collect_file(
-                        dump_path,
-                        'memory_dump',
-                        metadata
-                    )
+                self.artifact_collector.collect_file(
+                    dump_path,
+                    'memory_dump',
+                    metadata
+                )
                     
                     artifacts[f"memory_dump_{pid}"] = dump_path
 

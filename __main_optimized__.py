@@ -640,7 +640,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             """
             
             # Добавляем строки с находками
-            for finding in findings:
+            for row_index, finding in enumerate(findings):
                 html_content += "<tr>"
                 
                 if scanner_name == 'yara_scanner':
@@ -766,8 +766,6 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     finding_type = finding.get('type', 'Unknown')
                     data = finding.get('data', [])
                     
-
-                    
                     # Определяем детали и примеры
                     if isinstance(data, list) and len(data) > 0:
                         count = len(data)
@@ -778,8 +776,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             remote_examples = []
                             process_examples = []
                             status_examples = []
+                            detail_lines = []
                             
-                            for item in data[:3]:  # Показываем первые 3 примера
+                            for item in data[:3]:  # Показываем первые 3 примера в ячейках
                                 local_ip = item.get('local_ip', 'N/A')
                                 local_port = item.get('local_port', 'N/A')
                                 remote_ip = item.get('remote_ip', 'N/A')
@@ -793,6 +792,17 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 process_examples.append(f"{proc}({pid})" if pid != 'N/A' else proc)
                                 status_examples.append(conn_status)
                             
+                            # Полный список для раскрывающегося блока
+                            for item in data[:100]:
+                                local_ip = item.get('local_ip', 'N/A')
+                                local_port = item.get('local_port', 'N/A')
+                                remote_ip = item.get('remote_ip', 'N/A')
+                                remote_port = item.get('remote_port', 'N/A')
+                                proc = item.get('process_name', 'N/A')
+                                pid = item.get('pid', 'N/A')
+                                conn_status = item.get('status', 'N/A')
+                                detail_lines.append(f"<code>{local_ip}:{local_port}</code> → <code>{remote_ip}:{remote_port}</code> — <small>{proc}{f'({pid})' if pid!='N/A' else ''}</small> <span class='badge bg-secondary'>{conn_status}</span>")
+                            
                             local_addr = " | ".join(local_examples) if local_examples else "N/A"
                             remote_addr = " | ".join(remote_examples) if remote_examples else "N/A"
                             process_name = " | ".join(process_examples) if process_examples else "N/A"
@@ -804,8 +814,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             ip_examples = []
                             port_examples = []
                             process_examples = []
+                            detail_lines = []
                             
-                            for item in data[:3]:  # Показываем первые 3 примера
+                            for item in data[:3]:  # Показываем первые 3 примера в ячейках
                                 ip = item.get('ip', 'N/A')
                                 port = item.get('port', 'N/A')
                                 proc = item.get('process_name', 'N/A')
@@ -815,6 +826,14 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 port_examples.append(str(port))
                                 process_examples.append(f"{proc}({pid})" if pid != 'N/A' else proc)
                             
+                            # Полный список для раскрывающегося блока
+                            for item in data[:200]:
+                                ip = item.get('ip', 'N/A')
+                                port = item.get('port', 'N/A')
+                                proc = item.get('process_name', 'N/A')
+                                pid = item.get('pid', 'N/A')
+                                detail_lines.append(f"<code>{ip}:{port}</code> — <small>{proc}{f'({pid})' if pid!='N/A' else ''}</small>")
+                            
                             local_addr = " | ".join(ip_examples) if ip_examples else "N/A"
                             remote_addr = " | ".join(port_examples) if port_examples else "N/A"
                             process_name = " | ".join(process_examples) if process_examples else "N/A"
@@ -823,6 +842,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             
                         else:
                             # Для других типов
+                            detail_lines = []
                             local_addr = f"{count} items"
                             remote_addr = "N/A"
                             process_name = "N/A"
@@ -830,20 +850,37 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                             risk_level = 'low'
                     else:
                         # Если данных нет или они в неправильном формате
+                        detail_lines = []
                         local_addr = "N/A"
                         remote_addr = "N/A"
                         process_name = "N/A"
                         status = "No data"
                         risk_level = 'low'
                     
+                    # Идентификатор для раскрывающегося списка
+                    details_id = f"net-details-{row_index}"
+                    details_html = "<br>".join(detail_lines) if detail_lines else "<em>No details</em>"
+                    
                     html_content += f"""
                                 <td><code>{local_addr}</code></td>
                                 <td><code>{remote_addr}</code></td>
                                 <td><small>{process_name}</small></td>
-                                <td><span class="badge bg-info">{status}</span></td>
+                                <td><span class="badge bg-info" style="cursor:pointer" onclick=\"toggleDetails('{details_id}')\">{status}</span></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                     """
-                    
+                    # Добавляем раскрывающийся блок с полным списком портов/соединений
+                    html_content += f"""
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="p-0">
+                                    <div class="collapsible-content" id="{details_id}">
+                                        <div class="p-3">
+                                            <div class="small">{details_html}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                    """
+                
                 elif scanner_name == 'system_scanner':
                     # System scanner возвращает данные в формате {'type': '...', 'data': [...]}
                     finding_type = finding.get('type', 'Unknown')
