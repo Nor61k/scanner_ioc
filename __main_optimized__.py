@@ -773,27 +773,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                                 </table>
                                             </div>
                                         </div>
-                                        <div class="row px-3 pb-3">
-                                            <div class="col-12">
-                                                <h6><i class="fas fa-shield-alt"></i> Информация о правиле</h6>
-                                                <table class="table table-sm">
-                                                    <tr><td><strong>Правило:</strong></td><td><code>{rule_name}</code></td></tr>
-                                                    <tr><td><strong>Важность:</strong></td><td><span class="badge severity-{severity}">{severity.upper()}</span></td></tr>
-                                                    <tr><td><strong>Теги:</strong></td><td><code>{', '.join(finding.get('tags', []))}</code></td></tr>
-                                                </table>
-                                            </div>
-                                        </div>
-                                        <div class="row px-3 pb-3">
-                                            <div class="col-12">
-                                                <h6><i class="fas fa-info-circle"></i> Мета-информация</h6>
-                                                <table class="table table-sm">
-                                                    <tr><td><strong>Описание:</strong></td><td><code>{finding.get('meta', {}).get('description', 'Не указано')}</code></td></tr>
-                                                    <tr><td><strong>Оценка:</strong></td><td><code>{finding.get('meta', {}).get('score', 'Не указано')}</code></td></tr>
-                                                    <tr><td><strong>Дата:</strong></td><td><code>{finding.get('meta', {}).get('date', 'Не указано')}</code></td></tr>
-                                                    <tr><td><strong>Автор:</strong></td><td><code>{finding.get('meta', {}).get('author', 'Не указано')}</code></td></tr>
-                                                </table>
-                                            </div>
-                                        </div>
+                                         
                                         <div class="row px-3 pb-3">
                                             <div class="col-12">
                                                 <h6><i class="fas fa-search"></i> Технические детали совпадения</h6>
