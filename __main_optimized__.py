@@ -298,12 +298,18 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             min-width: 480px !important;
             max-width: 100% !important;
             font-size: 0.75rem !important;
+            table-layout: auto !important; /* чтобы колонки не схлопывались */
         }}
         .network-table th {{
             padding: 0.25rem !important;
             font-size: 0.7rem !important;
         }}
-        /* Явные ширины столбцов для сетевой таблицы */
+        /* Ширины колонок через colgroup + страховка nth-child */
+        .network-table col.col-src { width: 26% !important; }
+        .network-table col.col-dst { width: 26% !important; }
+        .network-table col.col-proc { width: 30% !important; }
+        .network-table col.col-status { width: 9% !important; }
+        .network-table col.col-risk { width: 9% !important; }
         .network-table th:nth-child(1), .network-table td:nth-child(1) { width: 26% !important; }
         .network-table th:nth-child(2), .network-table td:nth-child(2) { width: 26% !important; }
         .network-table th:nth-child(3), .network-table td:nth-child(3) { width: 30% !important; }
@@ -312,7 +318,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
         .network-table td {{
             font-size: 0.7rem !important;
             padding: 0.25rem !important;
-            word-break: break-all !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }}
         .table-dark th {{
             background-color: #343a40 !important;
@@ -566,6 +574,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
                         <table class="table table-sm table-striped table-hover align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else (' yara-table' if scanner_name == 'yara_scanner' else '')}" style="min-width: { '480px' if scanner_name == 'network_scanner' else '600px' };">
+                        { '<colgroup><col class=\'col-src\'/><col class=\'col-dst\'/><col class=\'col-proc\'/><col class=\'col-status\'/><col class=\'col-risk\'/></colgroup>' if scanner_name == 'network_scanner' else '' }
                         <thead class="table-dark">
                             <tr>
             """
