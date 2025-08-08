@@ -253,8 +253,8 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             width: 100%;
             table-layout: fixed;
         }}
-        .findings-table th:nth-child(1) {{ width: 40%; }}  /* Rule */
-        .findings-table th:nth-child(2) {{ width: 60%; }}  /* File */
+        .yara-table th:nth-child(1) {{ width: 40%; }}  /* Rule */
+        .yara-table th:nth-child(2) {{ width: 60%; }}  /* File */
         .clickable-rule:hover, .clickable-file:hover {{
             color: #0056b3 !important;
             text-decoration: underline;
@@ -295,18 +295,21 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             font-size: 0.8rem;
         }}
         .network-table {{
-            min-width: 250px !important;
-            max-width: 600px !important;
+            min-width: 480px !important;
+            max-width: 100% !important;
             font-size: 0.75rem !important;
         }}
         .network-table th {{
-            min-width: 30px !important;
-            max-width: 100px !important;
             padding: 0.25rem !important;
             font-size: 0.7rem !important;
         }}
+        /* Явные ширины столбцов для сетевой таблицы */
+        .network-table th:nth-child(1), .network-table td:nth-child(1) { width: 26% !important; }
+        .network-table th:nth-child(2), .network-table td:nth-child(2) { width: 26% !important; }
+        .network-table th:nth-child(3), .network-table td:nth-child(3) { width: 30% !important; }
+        .network-table th:nth-child(4), .network-table td:nth-child(4) { width: 9% !important; }
+        .network-table th:nth-child(5), .network-table td:nth-child(5) { width: 9% !important; }
         .network-table td {{
-            max-width: 100px !important;
             font-size: 0.7rem !important;
             padding: 0.25rem !important;
             word-break: break-all !important;
@@ -562,7 +565,7 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 </h4>
                 <div class="collapsible-content show" id="findings-{scanner_name}">
                     <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                        <table class="table table-sm table-striped table-hover align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else ''}" style="min-width: 600px;">
+                        <table class="table table-sm table-striped table-hover align-middle findings-table{' network-table' if scanner_name == 'network_scanner' else (' yara-table' if scanner_name == 'yara_scanner' else '')}" style="min-width: { '480px' if scanner_name == 'network_scanner' else '600px' };">
                         <thead class="table-dark">
                             <tr>
             """
