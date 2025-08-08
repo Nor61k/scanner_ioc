@@ -680,60 +680,9 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     except:
                         formatted_created_date = 'Unknown'
                     
-                    # Формируем детали срабатывания
-                    match_details = []
-                    for i, string_match in enumerate(strings[:5], 1):  # Показываем первые 5 совпадений
-                        identifier = string_match.get('identifier', 'Unknown')
-                        offset = string_match.get('offset', 0)
-                        data = string_match.get('data', '')
-                        
-                        # Обрабатываем данные в зависимости от типа
-                        try:
-                            if isinstance(data, str):
-                                if data.startswith('0x') or all(c in '0123456789abcdefABCDEF' for c in data):
-                                    # Это hex данные, конвертируем в ASCII
-                                    hex_data = data.replace('0x', '')
-                                    if len(hex_data) % 2 == 0:
-                                        try:
-                                            ascii_data = bytes.fromhex(hex_data).decode('utf-8', errors='ignore')
-                                            data_display = f"{data} ({ascii_data})"
-                                        except:
-                                            data_display = data
-                                    else:
-                                        data_display = data
-                                else:
-                                    data_display = data
-                            elif isinstance(data, bytes):
-                                # Байтовые данные
-                                try:
-                                    ascii_data = data.decode('utf-8', errors='ignore')
-                                    hex_data = data.hex()
-                                    data_display = f"0x{hex_data} ({ascii_data})"
-                                except:
-                                    data_display = f"0x{data.hex()}"
-                            else:
-                                data_display = str(data)
-                        except:
-                            data_display = str(data)
-                        
-                        # Ограничиваем длину данных для читаемости
-                        if len(data_display) > 150:
-                            data_display = data_display[:150] + "..."
-                        
-                        # Форматируем детали совпадения
-                        match_details.append(f"<strong>{identifier}:</strong> {data_display} <code>at 0x{offset:x}</code>")
-                    
-                    match_details_text = "<br>".join(match_details) if match_details else "Нет деталей совпадения"
-                    
-                    # Добавляем отладочную информацию о количестве совпадений
-                    if strings:
-                        match_details_text = f"<strong>Найдено совпадений:</strong> {len(strings)}<br><br>" + match_details_text
-                    
-                    # Добавляем описание угрозы из метаданных
+                    # Извлекаем описание угрозы из метаданных (для показа в блоке Информация о файле)
                     meta = finding.get('meta', {})
                     threat_description = meta.get('description', meta.get('threat', ''))
-                    if threat_description:
-                        match_details_text = f"<strong>Описание:</strong> {threat_description}<br><br>" + match_details_text
                     
 
                     
@@ -770,19 +719,11 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                                     <tr><td><strong>Создан:</strong></td><td><code>{formatted_created_date}</code></td></tr>
                                                     <tr><td><strong>Изменен:</strong></td><td><code>{formatted_date}</code></td></tr>
                                                     <tr><td><strong>Размер:</strong></td><td><code>{finding.get('file_size', 'Unknown')} bytes</code></td></tr>
+                                                    {f"<tr><td><strong>Описание:</strong></td><td><small>{threat_description}</small></td></tr>" if threat_description else ''}
                                                 </table>
                                             </div>
                                         </div>
-                                         
-                                        <div class="row px-3 pb-3">
-                                            <div class="col-12">
-                                                <h6><i class="fas fa-search"></i> Технические детали совпадения</h6>
-                                                <div class="alert alert-info">
-                                                    <p><strong>Правило сработало на следующие элементы:</strong></p>
-                                                    {match_details_text}
-                                                </div>
-                                            </div>
-                                        </div>
+                                        
                                     </div>
                                 </td>
                             </tr>
