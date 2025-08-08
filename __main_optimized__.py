@@ -305,16 +305,16 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             font-size: 0.7rem !important;
         }}
         /* Ширины колонок через colgroup + страховка nth-child */
-        .network-table col.col-src { width: 26% !important; }
-        .network-table col.col-dst { width: 26% !important; }
-        .network-table col.col-proc { width: 30% !important; }
-        .network-table col.col-status { width: 9% !important; }
-        .network-table col.col-risk { width: 9% !important; }
-        .network-table th:nth-child(1), .network-table td:nth-child(1) { width: 26% !important; }
-        .network-table th:nth-child(2), .network-table td:nth-child(2) { width: 26% !important; }
-        .network-table th:nth-child(3), .network-table td:nth-child(3) { width: 30% !important; }
-        .network-table th:nth-child(4), .network-table td:nth-child(4) { width: 9% !important; }
-        .network-table th:nth-child(5), .network-table td:nth-child(5) { width: 9% !important; }
+        .network-table col.col-src {{ width: 26% !important; }}
+        .network-table col.col-dst {{ width: 26% !important; }}
+        .network-table col.col-proc {{ width: 30% !important; }}
+        .network-table col.col-status {{ width: 9% !important; }}
+        .network-table col.col-risk {{ width: 9% !important; }}
+        .network-table th:nth-child(1), .network-table td:nth-child(1) {{ width: 26% !important; }}
+        .network-table th:nth-child(2), .network-table td:nth-child(2) {{ width: 26% !important; }}
+        .network-table th:nth-child(3), .network-table td:nth-child(3) {{ width: 30% !important; }}
+        .network-table th:nth-child(4), .network-table td:nth-child(4) {{ width: 9% !important; }}
+        .network-table th:nth-child(5), .network-table td:nth-child(5) {{ width: 9% !important; }}
         .network-table td {{
             font-size: 0.7rem !important;
             padding: 0.25rem !important;
