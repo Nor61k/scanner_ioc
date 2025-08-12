@@ -897,27 +897,67 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     """
                 
                 elif scanner_name == 'system_scanner':
-                    # System scanner возвращает данные в формате {'type': '...', 'data': [...]}
+                    # System scanner: {'type': '...', 'data': [...|{...}]}
                     finding_type = finding.get('type', 'Unknown')
                     data = finding.get('data', [])
-                    
+
+                    # Формируем сводку и тип данных
                     if isinstance(data, list):
-                        # Если data - это список, показываем количество элементов
                         count = len(data)
-                        details = f"Show {count} items"
+                        details_label = f"Show {count} items"
                         data_type = "List"
                     else:
-                        # Если data - это словарь, показываем ключи
                         count = len(data.keys()) if isinstance(data, dict) else 0
-                        details = f"Show {count} properties"
+                        details_label = f"Show {count} properties"
                         data_type = "Dictionary"
-                    
+
+                    # Уникальный ID для раскрывающегося блока
+                    sys_details_id = f"sys-details-{row_index}"
+
                     html_content += f"""
                                 <td><strong>{finding_type.replace('_', ' ').title()}</strong></td>
                                 <td><code>{finding_type}</code></td>
                                 <td><span class="badge bg-success">Collected</span></td>
-                                <td><small>{details}</small></td>
-                                <td><span class="badge bg-info">{data_type}</span></td>
+                                <td><span class=\"badge bg-info\" style=\"cursor:pointer\" onclick=\"toggleDetails('{sys_details_id}')\">{details_label}</span></td>
+                                <td><span class=\"badge bg-secondary\">{data_type}</span></td>
+                    """
+
+                    # Содержимое раскрывающегося блока
+                    details_lines = []
+                    try:
+                        if isinstance(data, list):
+                            for item in data[:200]:
+                                if isinstance(item, dict):
+                                    # Покажем первые 5 ключей
+                                    pairs = []
+                                    for k_idx, (k, v) in enumerate(item.items()):
+                                        if k_idx >= 5:
+                                            break
+                                        v_str = str(v)
+                                        v_str = v_str.replace('<', '&lt;').replace('>', '&gt;')
+                                        pairs.append(f"<code>{k}</code>: <small>{v_str}</small>")
+                                    details_lines.append("<div class='mb-1'>" + ", ".join(pairs) + "</div>")
+                                else:
+                                    s = str(item).replace('<', '&lt;').replace('>', '&gt;')
+                                    details_lines.append(f"<div class='mb-1'><small>{s}</small></div>")
+                        elif isinstance(data, dict):
+                            for k, v in list(data.items())[:200]:
+                                v_str = str(v).replace('<', '&lt;').replace('>', '&gt;')
+                                details_lines.append(f"<div class='mb-1'><code>{k}</code>: <small>{v_str}</small></div>")
+                    except Exception:
+                        pass
+
+                    sys_details_html = "".join(details_lines) if details_lines else "<em>No details</em>"
+                    html_content += f"""
+                            </tr>
+                            <tr>
+                                <td colspan=\"5\" class=\"p-0\">
+                                    <div class=\"collapsible-content\" id=\"{sys_details_id}\">
+                                        <div class=\"p-3\">
+                                            <div class=\"small\">{sys_details_html}</div>
+                                        </div>
+                                    </div>
+                                </td>
                     """
                     
                 elif scanner_name == 'registry_scanner':
