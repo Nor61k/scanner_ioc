@@ -43,16 +43,16 @@ MEDIUM_PRIORITY_EXTENSIONS = {'.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
 LOW_PRIORITY_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.avi', '.mp3', '.wav', '.txt', '.log'}
 
 # Глобальная функция для ProcessPoolExecutor
-def scan_file_batch_worker(files_batch: List[str], rules_path: str) -> List[Dict[str, Any]]:
+def scan_file_batch_worker(files_batch: List[str], rules_map: Dict[str, str]) -> List[Dict[str, Any]]:
     """
     Рабочая функция для сканирования пакета файлов в отдельном процессе
     """
     findings = []
     
     try:
-        # Загружаем правила в каждом процессе
-        if os.path.exists(rules_path):
-            rules = yara.compile(filepath=rules_path)
+        # Загружаем правила в каждом процессе (компиляция из набора файлов)
+        if isinstance(rules_map, dict) and rules_map:
+            rules = yara.compile(filepaths=rules_map)
         else:
             return findings
             
@@ -121,6 +121,9 @@ class YaraScanner(ScannerBase):
         self._file_priority_cache = {}
         self.thread_count = config.get("thread_count", multiprocessing.cpu_count())
         self.max_ram = config.get("max_ram", None)
+        self.execution_mode = config.get("execution", "process")  # process | thread
+        self.fast_mode = config.get("fast_mode", False)
+        self._rules_filepaths: Dict[str, str] = {}
         self.load_yara_rules()
 
     def _adapt_yara_rules_for_version(self, rules_dict: Dict[str, str]) -> Dict[str, str]:
@@ -213,6 +216,7 @@ class YaraScanner(ScannerBase):
                         msg = f"[YARA] Загружено {len(adapted_rules)} YARA правил (.yar) из {rules_dir}"
                         print(msg)
                         self.logger.info(msg)
+                        self._rules_filepaths = adapted_rules
                         rules_loaded = True
                         break
                     except Exception as compile_error:
@@ -223,6 +227,7 @@ class YaraScanner(ScannerBase):
                             msg = f"[YARA] Загружено {len(rules_dict)} YARA правил (.yar) из {rules_dir} (without adaptation)"
                             print(msg)
                             self.logger.info(msg)
+                            self._rules_filepaths = rules_dict
                             rules_loaded = True
                             break
                         except Exception as fallback_error:
@@ -576,40 +581,60 @@ class YaraScanner(ScannerBase):
         file_priorities = [(f, self._get_cached_file_priority(f) + self._get_cached_suspicion_score(f)) for f in all_files]
         file_priorities.sort(key=lambda x: x[1], reverse=True)
         sorted_files = [f[0] for f in file_priorities]
+
+        # Быстрый режим: ограничим количество файлов верхним порогом
+        if self.fast_mode:
+            max_fast_files = int(self.config.get("fast_mode_max_files", 10000))
+            sorted_files = sorted_files[:max_fast_files]
         
         self.logger.info(f"Найдено {len(sorted_files)} файлов для сканирования")
         
-        # Разбиваем на батчи для многопоточности
-        batch_size = max(1, len(sorted_files) // (self.thread_count * 4))
+        # Разбиваем на батчи
+        target_batches = max(self.thread_count * 2, 4)
+        batch_size = max(8, len(sorted_files) // target_batches)
         file_batches = [sorted_files[i:i + batch_size] for i in range(0, len(sorted_files), batch_size)]
-        
-        # Сканируем в многопоточном режиме
-        with ThreadPoolExecutor(max_workers=self.thread_count) as executor:
-            future_to_batch = {
-                executor.submit(self._scan_batch_optimized, batch): i
-                for i, batch in enumerate(file_batches)
-            }
-            
-            for future in as_completed(future_to_batch):
-                batch_idx = future_to_batch[future]
-                # Проверка лимита RAM перед обработкой каждого батча
-                while not self._ram_within_limit():
-                    self.logger.warning("RAM limit reached, pausing batch processing")
-                    time.sleep(1)
-                try:
-                    batch_findings = future.result()
-                    if batch_findings:
-                        findings.extend(batch_findings)
-                        
-                    self.scan_stats['files_scanned'] += len(file_batches[batch_idx])
-                    
-                except Exception as e:
-                    self.logger.error(f"Ошибка в батче {batch_idx}: {str(e)}")
-                    
-                # Проверяем время
-                if (datetime.now() - start_time).total_seconds() > max_scan_time:
-                    self.logger.info(f"Достигнут лимит времени ({max_scan_time} сек)")
-                    break
+
+        # Выбор режима исполнения: процессы ускорят YARA на GIL-секции
+        if self.execution_mode == "process":
+            with ProcessPoolExecutor(max_workers=self.thread_count) as executor:
+                future_to_batch = {
+                    executor.submit(scan_file_batch_worker, batch, self._rules_filepaths): i
+                    for i, batch in enumerate(file_batches)
+                }
+                for future in as_completed(future_to_batch):
+                    batch_idx = future_to_batch[future]
+                    while not self._ram_within_limit():
+                        time.sleep(0.5)
+                    try:
+                        batch_findings = future.result()
+                        if batch_findings:
+                            findings.extend(batch_findings)
+                        self.scan_stats['files_scanned'] += len(file_batches[batch_idx])
+                    except Exception as e:
+                        self.logger.debug(f"Batch {batch_idx} failed: {e}")
+                    if (datetime.now() - start_time).total_seconds() > max_scan_time:
+                        self.logger.info(f"Достигнут лимит времени ({max_scan_time} сек)")
+                        break
+        else:
+            with ThreadPoolExecutor(max_workers=self.thread_count) as executor:
+                future_to_batch = {
+                    executor.submit(self._scan_batch_optimized, batch): i
+                    for i, batch in enumerate(file_batches)
+                }
+                for future in as_completed(future_to_batch):
+                    batch_idx = future_to_batch[future]
+                    while not self._ram_within_limit():
+                        time.sleep(0.5)
+                    try:
+                        batch_findings = future.result()
+                        if batch_findings:
+                            findings.extend(batch_findings)
+                        self.scan_stats['files_scanned'] += len(file_batches[batch_idx])
+                    except Exception as e:
+                        self.logger.error(f"Ошибка в батче {batch_idx}: {str(e)}")
+                    if (datetime.now() - start_time).total_seconds() > max_scan_time:
+                        self.logger.info(f"Достигнут лимит времени ({max_scan_time} сек)")
+                        break
                     
         # Статистика
         scan_duration = (datetime.now() - start_time).total_seconds()
