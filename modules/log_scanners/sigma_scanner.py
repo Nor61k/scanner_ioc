@@ -10,20 +10,37 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-try:
-    import sigma
-    from sigma.parser import SigmaParser
-    from sigma.collection import SigmaCollection
-    from sigma.backends import Backend
-    SIGMA_AVAILABLE = True
-except ImportError:
-    SIGMA_AVAILABLE = False
+# Не выполняем тяжёлые импорты на уровне модуля, чтобы не падать при
+# недоступности pySigma/бэкендов. Импортируем лениво в методах.
+SIGMA_AVAILABLE = None  # Определим при первом обращении
 
 from modules.base_scanner import ScannerBase
-from sigma.backends.splunk import SplunkBackend
-from sigma.backends.elasticsearch import ElasticsearchBackend
-from sigma.pipelines.sysmon import sysmon_pipeline
-from sigma.pipelines.windows import windows_pipeline
+def _lazy_import_sigma_components(use_sysmon: bool, backend_type: str):
+    """Ленивая загрузка компонентов pySigma. Возвращает (SigmaCollection, backend, pipeline).
+    При ошибке возвращает (None, None, None).
+    """
+    try:
+        from sigma.collection import SigmaCollection  # type: ignore
+        if use_sysmon:
+            from sigma.pipelines.sysmon import sysmon_pipeline  # type: ignore
+            processing_pipeline = sysmon_pipeline()
+        else:
+            from sigma.pipelines.windows import windows_pipeline  # type: ignore
+            processing_pipeline = windows_pipeline()
+
+        if backend_type == "splunk":
+            from sigma.backends.splunk import SplunkBackend  # type: ignore
+            backend = SplunkBackend(processing_pipeline)
+        elif backend_type == "elasticsearch":
+            from sigma.backends.elasticsearch import ElasticsearchBackend  # type: ignore
+            backend = ElasticsearchBackend(processing_pipeline)
+        else:
+            return SigmaCollection, None, None
+
+        return SigmaCollection, backend, processing_pipeline
+    except Exception as e:
+        logging.getLogger("JetCSIRT.SigmaScanner").warning(f"pySigma components unavailable: {e}")
+        return None, None, None
 
 class SigmaScanner(ScannerBase):
     """
@@ -53,6 +70,13 @@ class SigmaScanner(ScannerBase):
         rules_dir = self.rules_dir
         
         try:
+            SigmaCollection, _, _ = _lazy_import_sigma_components(
+                self.config.get("use_sysmon", False), self.backend_type
+            )
+            if SigmaCollection is None:
+                self.logger.warning("pySigma is not available; SigmaScanner will be skipped")
+                return
+
             if os.path.isdir(rules_dir):
                 for root, _, files in os.walk(rules_dir):
                     for file in files:
@@ -81,7 +105,7 @@ class SigmaScanner(ScannerBase):
         except Exception as e:
             self.logger.error(f"Error loading Sigma rules: {str(e)}")
 
-    def convert_rule(self, rule: SigmaCollection, backend_type: str = "splunk") -> str:
+    def convert_rule(self, rule, backend_type: str = "splunk") -> Optional[str]:
         """
         Конвертация правила Sigma в запрос для конкретного бэкенда
         
@@ -93,22 +117,12 @@ class SigmaScanner(ScannerBase):
             str: Запрос для выбранного бэкенда
         """
         try:
-            # Выбираем и настраиваем пайплайн
-            if self.config.get("use_sysmon", False):
-                processing_pipeline = sysmon_pipeline()
-            else:
-                processing_pipeline = windows_pipeline()
-
-            # Выбираем бэкенд
-            if backend_type == "splunk":
-                backend = SplunkBackend(processing_pipeline)
-            elif backend_type == "elasticsearch":
-                backend = ElasticsearchBackend(processing_pipeline)
-            else:
-                raise ValueError(f"Unsupported backend type: {backend_type}")
-                
+            SigmaCollection, backend, _ = _lazy_import_sigma_components(
+                self.config.get("use_sysmon", False), backend_type
+            )
+            if backend is None:
+                raise RuntimeError("pySigma backend is unavailable")
             return backend.convert(rule)[0]
-            
         except Exception as e:
             self.logger.error(f"Error converting rule: {str(e)}")
             return None
