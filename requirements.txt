@@ -6,7 +6,7 @@ requests
 cryptography
 # Для работы с csv, json, pathlib, datetime используются стандартные библиотеки Python 
 # Для SigmaScanner:
-# sigma
+sigma
 # Для RegistryScanner (offline):
 # python-registry
 # Для интеграций TI:

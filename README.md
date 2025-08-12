@@ -1,93 +1,102 @@
-# scanner_ioc
+# JetCSIRT scanner_ioc
 
-## Примеры запуска с ограничением ресурсов
+Минимальный набор команд и примеров для актуальной версии с оптимизированным запуском и HTML-отчётом.
 
-Ограничить количество потоков/процессов (CPU):
+## Быстрый старт
 
-```
-python __main__.py --max-cpu 4
-```
-
-Ограничить использование оперативной памяти (RAM, в мегабайтах):
-
-```
-python __main__.py --max-ram 2048
+- Установка зависимостей:
+```bash
+python -m pip install -r requirements.txt
 ```
 
-Комбинированный пример (ограничение и CPU, и RAM):
-
-```
-python __main__.py --max-cpu 4 --max-ram 2048
-```
-
-Остальные параметры можно комбинировать по необходимости:
-
-```
-python __main__.py --config config/scan_manager.yaml --output output --logs logs --max-cpu 2
+- Запуск (все сканеры параллельно) и вывод отчёта:
+```bash
+python __main_optimized__.py --config config/scan_manager.yaml --output output
 ```
 
-## Дополнительные примеры запуска
+- Отчёт: файл `output/scan_report.html`. Промежуточные JSON автоматически удаляются, каталог `artifacts/` очищается после генерации отчёта.
 
-### Запуск отдельного сканера
+## Ключевые параметры
+- `--config`: путь к конфигурации (`config/scan_manager.yaml`)
+- `--output`: каталог вывода (по умолчанию `output`)
+- `--logs`: каталог логов (по умолчанию `logs`)
+- `--case-id`: идентификатор кейса
+- `--encryption-key`: ключ шифрования для артефактов
+- `--scanner`: запуск одного сканера
+  - значения: `yara_scanner`, `memory_scanner`, `network_scanner`, `registry_scanner`, `ioc_scanner`, `system_scanner`
+  - также доступен: `sigma_scanner` (анализ логов по правилам Sigma)
+- `--max-cpu`: ограничение потоков/процессов (число)
+- `--max-ram`: ограничение RAM в МБ
 
-Запустить только YARA сканер:
-
-```
-python __main__.py --scanner yara_scanner --max-cpu 2
-```
-
-Запустить только сканер памяти:
-
-```
-python __main__.py --scanner memory_scanner --max-ram 1024
-```
-
-### Запуск с шифрованием артефактов
-
-```
-python __main__.py --encryption-key mysecretkey --max-cpu 4
+## Примеры запуска (macOS/Linux)
+- Ограничить CPU:
+```bash
+python __main_optimized__.py --max-cpu 4
 ```
 
-### Запуск с пользовательским case ID
-
-```
-python __main__.py --case-id incident_2024_001 --max-cpu 2 --max-ram 1024
-```
-
-### Запуск с ограниченными ресурсами для больших систем
-
-```
-python __main__.py --max-cpu 1 --max-ram 512 --output /path/to/results
+- Ограничить RAM (МБ):
+```bash
+python __main_optimized__.py --max-ram 2048
 ```
 
-### Запуск в фоновом режиме (Linux/macOS)
-
-```
-nohup python __main__.py --max-cpu 2 --max-ram 1024 > scan.log 2>&1 &
-```
-
-### Запуск с мониторингом ресурсов
-
-```
-python __main__.py --max-cpu 4 --max-ram 2048 --logs detailed_logs
+- Комбинация параметров:
+```bash
+python __main_optimized__.py --config config/scan_manager.yaml --output output --logs logs --max-cpu 2 --max-ram 1024
 ```
 
-### Примеры для различных конфигураций
-
-Минимальные ресурсы для тестирования:
-
-```
-python __main__.py --max-cpu 1 --max-ram 256
+- Запуск одного сканера (пример: YARA):
+```bash
+python __main_optimized__.py --scanner yara_scanner --max-cpu 2
 ```
 
-Оптимальные ресурсы для production:
+- Запуск Sigma сканера (пример):
+```bash
+python __main_optimized__.py --scanner sigma_scanner --config config/scan_manager.yaml --output output
+```
 
-```
-python __main__.py --max-cpu 8 --max-ram 4096
+- Запуск в фоне:
+```bash
+nohup python __main_optimized__.py --max-cpu 2 --max-ram 1024 > logs/scan.log 2>&1 &
 ```
 
-Ресурсы для критических систем:
+- Шифрование артефактов и кастомный кейс:
+```bash
+python __main_optimized__.py --encryption-key mysecretkey --case-id incident_2024_001 --max-cpu 2 --max-ram 1024
+```
 
+## Примеры запуска (Windows CMD/PowerShell)
+- Базовый запуск:
+```bat
+python __main_optimized__.py --config config\scan_manager.yaml --output output
 ```
-python __main__.py --max-cpu 2 --max-ram 1024 --case-id critical_scan
+
+- С ограничением ресурсов:
+```bat
+python __main_optimized__.py --max-cpu 2 --max-ram 1024 --logs logs
 ```
+
+- Один сканер (память):
+```bat
+python __main_optimized__.py --scanner memory_scanner --max-ram 1024
+```
+
+- Один сканер (Sigma):
+```bat
+python __main_optimized__.py --scanner sigma_scanner --output output
+```
+
+- С шифрованием и case-id:
+```bat
+python __main_optimized__.py --encryption-key mysecretkey --case-id critical_scan
+```
+
+## Что в отчёте
+- Разделы по каждому сканеру. “Alerts” используется для детектов; у `system_scanner` раздел помечен как “Info” (информационные данные).
+- Для YARA алертов — компактная таблица, кликабельные строки раскрывают детали: путь, хеш (MD5), владелец, даты создания/изменения, размер файла.
+- Для сетевого сканера — компактная таблица (`Src IP`, `Dst IP`, `Proc`, `Status`, `Risk`), статус кликабелен и раскрывает список соединений/портов.
+- Секции артефактов сворачиваются по умолчанию и могут быть раскрыты.
+
+## Примечания
+- Ограничения `--max-cpu` и `--max-ram` прокидываются во все сканеры через конфигурации.
+- Для YARA предусмотрена автоматическая адаптация правил под версию YARA. При ошибках компиляции выполняется повторная загрузка без адаптации.
+- Путь к правилам памяти можно переопределить через ключ `memory_rules_dir` в конфиге сканера памяти.

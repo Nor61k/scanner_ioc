@@ -557,17 +557,24 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             if len(findings) == 0:
                 continue
                 
+            # Текст в шапке секции: для system_scanner это просто информация
+            header_line = (
+                f"Show {len(findings)} items, {len(artifacts)} artifacts"
+                if scanner_name == 'system_scanner'
+                else f"Found {len(findings)} alerts, {len(artifacts)} artifacts"
+            )
+
             html_content += f"""
         <div class="scanner-section" id="{scanner_name}">
             <div class="scanner-header">
                 <h3><i class="fas fa-search"></i> {scanner_name.replace('_', ' ').title()}</h3>
-                <p class="mb-0">Found {len(findings)} alerts, {len(artifacts)} artifacts</p>
+                <p class="mb-0">{header_line}</p>
             </div>
             
             <!-- Находки -->
             <div class="findings-section">
                 <h4 class="collapsible" onclick="toggleSection('findings-{scanner_name}')">
-                    <i class="fas fa-exclamation-triangle"></i> Alerts 
+                    <i class="fas fa-exclamation-triangle"></i> { 'Info' if scanner_name == 'system_scanner' else 'Alerts' } 
                     <span class="badge bg-primary">{len(findings)}</span>
                     <i class="fas fa-chevron-down collapsible-icon" id="findings-{scanner_name}-icon"></i>
                 </h4>
@@ -625,6 +632,14 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Type</th>
                                 <th>Risk</th>
                                 <th>Desc</th>
+                """
+            elif scanner_name == 'sigma_scanner':
+                html_content += """
+                                <th>Log</th>
+                                <th>Rule</th>
+                                <th>Level</th>
+                                <th>Line #</th>
+                                <th>Snippet</th>
                 """
             else:
                 html_content += """
@@ -889,12 +904,12 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     if isinstance(data, list):
                         # Если data - это список, показываем количество элементов
                         count = len(data)
-                        details = f"Found {count} items"
+                        details = f"Show {count} items"
                         data_type = "List"
                     else:
                         # Если data - это словарь, показываем ключи
                         count = len(data.keys()) if isinstance(data, dict) else 0
-                        details = f"Found {count} properties"
+                        details = f"Show {count} properties"
                         data_type = "Dictionary"
                     
                     html_content += f"""
@@ -918,6 +933,55 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <td><span class="badge bg-secondary">{value_type}</span></td>
                                 <td><span class="badge severity-{risk_level}">{risk_level.upper()}</span></td>
                                 <td><small>{description}</small></td>
+                    """
+                
+                elif scanner_name == 'sigma_scanner':
+                    # Ожидаемый формат: {'type': 'sigma_matches', 'log_file': '...', 'matches': [...]}
+                    log_file = finding.get('log_file', 'Unknown')
+                    matches = finding.get('matches', [])
+                    
+                    # Покажем первые совпадения (компактно) и сделаем раскрываемый блок
+                    row_id = f"sigma-details-{row_index}"
+                    if matches:
+                        m = matches[0]
+                        rule = m.get('rule', 'Unknown')
+                        level = (m.get('level') or 'info').upper()
+                        line_no = m.get('line_number', '-')
+                        snippet = m.get('line', '')[:120]
+                    else:
+                        rule = '—'
+                        level = 'INFO'
+                        line_no = '-'
+                        snippet = 'No matches'
+                    
+                    html_content += f"""
+                                <td class=\"text-truncate\" title=\"{log_file}\"><code>{log_file}</code></td>
+                                <td><small>{rule}</small></td>
+                                <td><span class=\"badge bg-info\">{level}</span></td>
+                                <td><code>{line_no}</code></td>
+                                <td>
+                                    <small class=\"text-truncate\" style=\"max-width:280px; display:inline-block;\">{snippet}</small>
+                                    <span class=\"badge bg-secondary\" style=\"cursor:pointer\" onclick=\"toggleDetails('{row_id}')\">Show ({len(matches)} hits)</span>
+                                </td>
+                    """
+                    # Добавляем раскрывающийся блок с полным списком совпадений
+                    details_lines = []
+                    for hit in matches[:200]:
+                        details_lines.append(
+                            f"<div class='mb-2'><strong>{hit.get('rule','Unknown')}</strong> [<code>{hit.get('level','info')}</code>] "
+                            f"line <code>{hit.get('line_number','-')}</code><br><small>{hit.get('line','').replace('<','&lt;').replace('>','&gt;')}</small></div>"
+                        )
+                    details_html = "".join(details_lines) if details_lines else "<em>No details</em>"
+                    html_content += f"""
+                            </tr>
+                            <tr>
+                                <td colspan=\"5\" class=\"p-0\">
+                                    <div class=\"collapsible-content\" id=\"{row_id}\">
+                                        <div class=\"p-3\">
+                                            <div class=\"small\">{details_html}</div>
+                                        </div>
+                                    </div>
+                                </td>
                     """
                     
                 else:

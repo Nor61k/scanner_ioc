@@ -11,6 +11,7 @@ from modules.ioc_scanners.ioc_scanner import IOCScanner
 from modules.network_scanners.network_scanner import NetworkScanner
 from modules.system_scanners.system_scanner import SystemScanner
 from modules.registry_scanners.registry_scanner import RegistryScanner
+from modules.log_scanners.sigma_scanner import SigmaScanner
 from core.artifact_collector import ArtifactCollector
 
 class ScannerFactory:
@@ -23,6 +24,7 @@ class ScannerFactory:
         'network_scanner': NetworkScanner,
         'system_scanner': SystemScanner,
         'registry_scanner': RegistryScanner,
+        'sigma_scanner': SigmaScanner,
     }
     
     @classmethod
