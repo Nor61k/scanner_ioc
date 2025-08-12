@@ -37,27 +37,44 @@ class SigmaScanner(ScannerBase):
     def __init__(self, config: Dict[str, Any], artifact_collector=None):
         super().__init__("sigma_scanner", config, artifact_collector)
         self.rules = []
+        self.backend_type = self.config.get("backend_type", "splunk")
+        # Совместимость ключей конфигурации: rules_dir или rules_path
+        self.rules_dir = (
+            self.config.get("rules_dir")
+            or self.config.get("rules_path")
+            or "rules/sigma"
+        )
         self.load_sigma_rules()
 
     def load_sigma_rules(self) -> None:
         """
         Загрузка правил Sigma
         """
-        rules_dir = self.config.get("rules_dir", "rules/sigma")
+        rules_dir = self.rules_dir
         
         try:
-            for root, _, files in os.walk(rules_dir):
-                for file in files:
-                    if file.endswith(('.yml', '.yaml')):
-                        rule_path = os.path.join(root, file)
-                        try:
-                            # Используем новый API для загрузки правил
-                            with open(rule_path, 'r', encoding='utf-8') as f:
-                                rule_data = yaml.safe_load_all(f)
-                                sigma_rule = SigmaCollection.from_yaml(rule_data)
-                                self.rules.append(sigma_rule)
-                        except Exception as e:
-                            self.logger.error(f"Error loading rule {file}: {str(e)}")
+            if os.path.isdir(rules_dir):
+                for root, _, files in os.walk(rules_dir):
+                    for file in files:
+                        if file.endswith(('.yml', '.yaml')):
+                            rule_path = os.path.join(root, file)
+                            try:
+                                with open(rule_path, 'r', encoding='utf-8') as f:
+                                    rule_data = yaml.safe_load_all(f)
+                                    sigma_rule = SigmaCollection.from_yaml(rule_data)
+                                    self.rules.append(sigma_rule)
+                            except Exception as e:
+                                self.logger.error(f"Error loading rule {file}: {str(e)}")
+            elif os.path.isfile(rules_dir) and rules_dir.endswith(('.yml', '.yaml')):
+                try:
+                    with open(rules_dir, 'r', encoding='utf-8') as f:
+                        rule_data = yaml.safe_load_all(f)
+                        sigma_rule = SigmaCollection.from_yaml(rule_data)
+                        self.rules.append(sigma_rule)
+                except Exception as e:
+                    self.logger.error(f"Error loading rule file {rules_dir}: {str(e)}")
+            else:
+                self.logger.warning(f"Sigma rules path not found or has no YAML: {rules_dir}")
                             
             self.logger.info(f"Loaded {len(self.rules)} Sigma rules")
             
@@ -110,9 +127,16 @@ class SigmaScanner(ScannerBase):
         matches = []
         
         try:
-            # Читаем лог-файл
-            with open(log_file, 'r', encoding='utf-8') as f:
-                log_data = f.readlines()
+            # Читаем лог-файл (только текстовые форматы)
+            if log_file.lower().endswith(('.log', '.txt', '.csv', '.json', '.ndjson')):
+                with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    log_data = f.readlines()
+            elif log_file.lower().endswith('.evtx'):
+                self.logger.warning(f"Skipping EVTX without parser: {log_file}")
+                return matches
+            else:
+                self.logger.debug(f"Skip non-text log: {log_file}")
+                return matches
                 
             # Проверяем каждое правило
             for rule in self.rules:
@@ -152,22 +176,35 @@ class SigmaScanner(ScannerBase):
         """
         findings = []
         
-        # Получаем пути к лог-файлам
+        # Получаем пути к логам: поддерживаем файлы и директории
         log_paths = self.config.get("log_paths", [])
-        backend_type = self.config.get("backend_type", "splunk")
+        backend_type = self.backend_type
         
         for log_path in log_paths:
-            if os.path.exists(log_path):
-                try:
-                    matches = self.analyze_log(log_path, backend_type)
+            if not os.path.exists(log_path):
+                self.logger.warning(f"Log path does not exist: {log_path}")
+                continue
+            try:
+                targets: List[str] = []
+                if os.path.isdir(log_path):
+                    for root, _, files in os.walk(log_path):
+                        for fn in files:
+                            full = os.path.join(root, fn)
+                            if full.lower().endswith(('.log', '.txt', '.csv', '.json', '.ndjson', '.evtx')):
+                                targets.append(full)
+                else:
+                    targets.append(log_path)
+
+                for file_path in targets:
+                    matches = self.analyze_log(file_path, backend_type)
                     if matches:
                         findings.append({
                             'type': 'sigma_matches',
-                            'log_file': log_path,
+                            'log_file': file_path,
                             'matches': matches
                         })
-                except Exception as e:
-                    self.logger.error(f"Error scanning log file {log_path}: {str(e)}")
+            except Exception as e:
+                self.logger.error(f"Error scanning log path {log_path}: {str(e)}")
                     
         return findings
 
