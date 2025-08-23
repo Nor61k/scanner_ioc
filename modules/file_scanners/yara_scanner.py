@@ -45,31 +45,66 @@ LOW_PRIORITY_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.av
 # Глобальная функция для ProcessPoolExecutor
 def scan_file_batch_worker(files_batch: List[str], rules_map: Dict[str, str]) -> List[Dict[str, Any]]:
     """
-    Рабочая функция для сканирования пакета файлов в отдельном процессе
+    Рабочая функция для сканирования пакета файлов в отдельном процессе.
+    Дополнительно собирает метаданные файла (hash/size/times/owner),
+    чтобы в HTML-отчёте корректно заполнялись поля вместо "Unknown".
     """
     findings = []
-    
+
+    def _safe_md5(path: str) -> str:
+        try:
+            hasher = hashlib.md5()
+            with open(path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+        except Exception:
+            return ""
+
+    def _safe_owner(path: str) -> str:
+        try:
+            return Path(path).owner()
+        except Exception:
+            try:
+                import pwd  # type: ignore
+                return pwd.getpwuid(os.stat(path).st_uid).pw_name
+            except Exception:
+                return "unknown"
+
     try:
         # Загружаем правила в каждом процессе (компиляция из набора файлов)
         if isinstance(rules_map, dict) and rules_map:
             rules = yara.compile(filepaths=rules_map)
         else:
             return findings
-            
+
         for file_path in files_batch:
             try:
                 # Быстрая проверка
                 if not os.path.exists(file_path) or not os.access(file_path, os.R_OK):
                     continue
-                    
-                # Проверяем размер
+
+                # Проверяем размер и сразу сохраняем
                 try:
-                    size = os.path.getsize(file_path)
-                    if size > 10 * 1024 * 1024:  # 10MB
+                    file_size = os.path.getsize(file_path)
+                    if file_size > 10 * 1024 * 1024:  # 10MB
                         continue
-                except:
-                    continue
-                    
+                except Exception:
+                    file_size = 0
+
+                try:
+                    file_modified = datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                except Exception:
+                    file_modified = None
+
+                try:
+                    file_created = datetime.fromtimestamp(os.path.getctime(file_path)).isoformat()
+                except Exception:
+                    file_created = None
+
+                file_owner = _safe_owner(file_path)
+                file_hash = _safe_md5(file_path)
+
                 # Сканируем файл
                 matches = rules.match(file_path)
                 if matches:
@@ -88,17 +123,23 @@ def scan_file_batch_worker(files_batch: List[str], rules_map: Dict[str, str]) ->
                                 } for s in match.strings
                             ],
                             "meta": dict(match.meta) if match.meta else {},
-                            "timestamp": datetime.now().isoformat()
+                            "timestamp": datetime.now().isoformat(),
+                            # Добавленные метаданные для отчёта
+                            "file_hash": file_hash,
+                            "file_size": file_size,
+                            "file_modified": file_modified,
+                            "file_created": file_created,
+                            "file_owner": file_owner,
                         }
                         findings.append(finding)
-                        
+
             except Exception as e:
                 if "could not open file" not in str(e).lower():
                     continue
-                    
+
     except Exception as e:
         pass
-        
+
     return findings
 
 class YaraScanner(ScannerBase):
@@ -346,25 +387,25 @@ class YaraScanner(ScannerBase):
     def get_file_hash(self, file_path: str) -> str:
         """Вычисляет MD5 хеш файла"""
         try:
+            hasher = hashlib.md5()
             with open(file_path, 'rb') as f:
-                return hashlib.md5(f.read(8192)).hexdigest()  # Первые 8KB
+                for chunk in iter(lambda: f.read(8192), b''):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
         except:
             return ""
     
     def _get_file_owner(self, file_path: str) -> str:
-        """Получает владельца файла"""
+        """Получает владельца файла (кроссплатформенно)"""
         try:
-            import stat
-            import pwd
-            st = os.stat(file_path)
-            uid = st.st_uid
-            try:
-                owner = pwd.getpwuid(uid).pw_name
-                return owner
-            except KeyError:
-                return str(uid)
+            # pathlib.Path.owner() работает и на Windows, и на Unix (при наличии прав)
+            return Path(file_path).owner()
         except Exception:
-            return "unknown"
+            try:
+                import pwd  # type: ignore
+                return pwd.getpwuid(os.stat(file_path).st_uid).pw_name
+            except Exception:
+                return "unknown"
 
     @lru_cache(maxsize=1000)
     def _get_cached_file_priority(self, file_path: str) -> int:
