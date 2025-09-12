@@ -2,15 +2,19 @@
 
 
 a = Analysis(
-    ['__main__.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[
+        ('config', 'config'),
+        ('rules', 'rules'),
+        ('chainsaw', 'chainsaw'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['MySQLdb', 'pysqlite2'],
     noarchive=False,
     optimize=0,
 )

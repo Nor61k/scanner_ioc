@@ -52,7 +52,9 @@ class SigmaScanner(ScannerBase):
     """
     
     def __init__(self, config: Dict[str, Any], artifact_collector=None):
-        super().__init__("sigma_scanner", config, artifact_collector)
+        # Этот класс устарел. Оставлен как заглушка, чтобы не ломать импорты в старых конфигурациях.
+        # Вся логика Sigma теперь реализована в core/sigma_scanner.py (sigma-cli офлайн).
+        super().__init__("sigma_scanner_DEPRECATED", config, artifact_collector)
         self.rules = []
         self.backend_type = self.config.get("backend_type", "splunk")
         # Совместимость ключей конфигурации: rules_dir или rules_path

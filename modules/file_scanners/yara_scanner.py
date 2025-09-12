@@ -240,14 +240,17 @@ class YaraScanner(ScannerBase):
                 continue
                 
             try:
-                # Компилируем только .yar файлы в директории
+                # Компилируем .yar и .yara файлы в директории
                 rules_dict = {}
-                for rule_file in rules_dir.glob("**/*.yar"):
+                for rule_file in rules_dir.rglob("*"):
+                    if rule_file.suffix.lower() not in {".yar", ".yara"}:
+                        continue
                     try:
                         rules_dict[rule_file.name] = str(rule_file)
                     except Exception as e:
-                        self.logger.error(f"Ошибка компиляции правила {rule_file}: {str(e)}")
+                        self.logger.error(f"Ошибка добавления правила {rule_file}: {str(e)}")
                 
+                self.logger.info(f"[YARA] Найдено файлов правил (*.yar) в {rules_dir}: {len(rules_dict)}")
                 if rules_dict:
                     # Адаптируем правила под версию YARA
                     adapted_rules = self._adapt_yara_rules_for_version(rules_dict)
@@ -606,7 +609,7 @@ class YaraScanner(ScannerBase):
         findings = []
         
         # Получаем настройки
-        scan_paths = kwargs.get("scan_paths", self.config.get("scan_paths", ["C:\\Users"]))
+        scan_paths = kwargs.get("scan_paths", self.config.get("scan_paths", ["C:\\"]))
         exclude_paths = kwargs.get("exclude_paths", []) + self.config.get("exclude_paths", []) + SKIP_PATHS
         max_file_size = kwargs.get("max_file_size", self.config.get("max_file_size", 10 * 1024 * 1024))
         max_scan_time = kwargs.get("max_scan_time", self.config.get("max_scan_time", float('inf')))

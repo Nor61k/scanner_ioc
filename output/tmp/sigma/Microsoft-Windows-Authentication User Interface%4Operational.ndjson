@@ -1,0 +1,1 @@
+{"EventID": "5013", "Channel": "Microsoft-Windows-Authentication User Interface/Operational", "Provider_Name": "Microsoft-Windows-Shell-AuthUI", "Computer": "DESKTOP-OFJ6N53", "TimeCreated": "2022-02-24 09:08:46.004602+00:00", "RecordID": "1", "Level": "3", "UserID": "S-1-5-18", "EventData.AutoLogonSettingRemovalReason": "0"}

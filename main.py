@@ -31,6 +31,15 @@ def setup_environment():
     # Настраиваем multiprocessing
     multiprocessing.set_start_method('spawn', force=True)
 
+    # Если запущены как EXE, выставим рабочую директорию = директории EXE,
+    # чтобы относительные пути (config/, rules/, chainsaw/) корректно работали
+    try:
+        if getattr(sys, 'frozen', False):
+            exe_dir = Path(sys.executable).parent
+            os.chdir(str(exe_dir))
+    except Exception:
+        pass
+
 
 def load_user_whitelist() -> Dict[str, Any]:
     """Загрузка пользовательского whitelist"""
@@ -133,18 +142,19 @@ def run_parallel_scanners(config: Dict[str, Any], args: argparse.Namespace) -> i
 
         # Запускаем каждый сканер в отдельном процессе
         for scanner_name in enabled_scanners:
-            # Определяем правильный путь к файлу
+            # Sigma orchestrated separately via Chainsaw in main(); do not spawn a process here
+            if scanner_name == 'sigma_scanner':
+                logging.debug("Sigma scanner is orchestrated in main.py (Chainsaw). Skipping separate process spawn.")
+                continue
+            # Определяем правильную команду запуска для подпроцесса
             if getattr(sys, 'frozen', False):
-                # Если запущено как exe
-                script_path = sys.executable
+                # Запущено как единый EXE — повторно запускаем тот же исполняемый файл
+                base_cmd = [sys.executable]
             else:
-                # Если запущено как Python скрипт
-                script_path = sys.executable
-                script_file = __file__
+                # Запущено как Python скрипт — вызываем интерпретатор с текущим файлом
+                base_cmd = [sys.executable, __file__]
 
-            cmd = [
-                script_path,
-                script_file,
+            cmd = base_cmd + [
                 '--scanner', scanner_name,
                 '--config', args.config,
                 '--output', args.output,
@@ -564,12 +574,18 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
             artifacts = data.get('artifacts', {})
             artifacts_count = len(artifacts)
 
-            # Текст в шапке секции: для system_scanner это просто информация
-            header_line = (
-                f"Show {len(findings)} items, {len(artifacts)} artifacts"
-                if scanner_name == 'system_scanner'
-                else f"Found {len(findings)} alerts, {len(artifacts)} artifacts"
-            )
+            # Текст в шапке секции
+            if scanner_name == 'system_scanner':
+                header_line = f"Show {len(findings)} items, {len(artifacts)} artifacts"
+            elif scanner_name in ['sigma_offline', 'sigma']:
+                meta = data.get('meta', {}) if isinstance(data, dict) else {}
+                header_line = (
+                    f"Sigma CLI: {meta.get('sigma_cli_version','unknown')} | "
+                    f"Pipeline: {meta.get('pipeline','-')} | "
+                    f"Files: {meta.get('files_scanned',0)} | Errors: {len(meta.get('errors',[]))}"
+                )
+            else:
+                header_line = f"Found {len(findings)} alerts, {len(artifacts)} artifacts"
 
             html_content += f"""
         <div class="scanner-section" id="{scanner_name}">
@@ -577,7 +593,54 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                 <h3><i class="fas fa-search"></i> {scanner_name.replace('_', ' ').title()}</h3>
                 <p class="mb-0">{header_line}</p>
             </div>
-            
+            """
+
+            # Специальный минимальный блок статуса для Sigma
+            if scanner_name == 'sigma_scanner':
+                # Считаем уровни из sigma_findings.json
+                sigma_json_path = Path(output_dir) / 'sigma_findings.json'
+                high_cnt = 0
+                med_cnt = 0
+                low_cnt = 0
+                info_cnt = 0
+                status_ok = True
+                try:
+                    if sigma_json_path.exists():
+                        with open(sigma_json_path, 'r', encoding='utf-8') as sf:
+                            sdata = json.load(sf)
+                        sfindings = sdata.get('findings', []) if isinstance(sdata, dict) else []
+                        for it in sfindings:
+                            lvl = str(it.get('level', '')).lower()
+                            if lvl in ('critical', 'high'):
+                                high_cnt += 1
+                            elif lvl == 'medium':
+                                med_cnt += 1
+                            elif lvl == 'low':
+                                low_cnt += 1
+                            else:
+                                info_cnt += 1
+                        meta_s = sdata.get('meta', {}) if isinstance(sdata, dict) else {}
+                        errs = meta_s.get('errors', []) if isinstance(meta_s, dict) else []
+                        status_ok = len(errs) == 0
+                except Exception:
+                    status_ok = False
+
+                status_text = 'OK' if status_ok else 'FAIL'
+                html_content += f"""
+            <div class="mb-3">
+                <div><strong>Sigma Scan Passed - {status_text}</strong></div>
+                <div class="mt-1"><strong>Alerts:</strong></div>
+                <div>High: {high_cnt}</div>
+                <div>Medium: {med_cnt}</div>
+                <div>Low: {low_cnt}</div>
+                <div>Info: {info_cnt}</div>
+                <div class="mt-2">File: <a href="sigma_findings.json">sigma_findings.json</a></div>
+            </div>
+        </div>
+                """
+                continue
+
+            html_content += f"""
             <!-- Находки -->
             <div class="findings-section">
                 <h4 class="collapsible" onclick="toggleSection('findings-{scanner_name}')">
@@ -612,6 +675,15 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     html_content += "<tr><td colspan=\"3\"><em>No findings</em></td></tr>"
 
             # Определяем заголовки таблицы в зависимости от типа сканера
+            is_sigma_offline = False
+            if scanner_name == 'sigma_scanner':
+                # Детектируем офлайновый формат (chainsaw): наличие поля rule_title
+                try:
+                    if findings and isinstance(findings[0], dict) and ('rule_title' in findings[0]):
+                        is_sigma_offline = True
+                except Exception:
+                    is_sigma_offline = False
+
             if scanner_name == 'yara_scanner':
                 html_content += """
                                 <th>Rule</th>
@@ -659,12 +731,27 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                 <th>Desc</th>
                 """
             elif scanner_name == 'sigma_scanner':
-                html_content += """
+                if is_sigma_offline:
+                    html_content += """
+                                <th>Rule Title</th>
+                                <th>Rule ID</th>
+                                <th>Level</th>
+                                <th>Count</th>
+                    """
+                else:
+                    html_content += """
                                 <th>Log</th>
                                 <th>Rule</th>
                                 <th>Level</th>
                                 <th>Line #</th>
                                 <th>Snippet</th>
+                    """
+            elif scanner_name == 'sigma_offline' or scanner_name == 'sigma':
+                html_content += """
+                                <th>Rule Title</th>
+                                <th>Rule ID</th>
+                                <th>Level</th>
+                                <th>Count</th>
                 """
             else:
                 html_content += """
@@ -998,25 +1085,62 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                     """
 
                 elif scanner_name == 'sigma_scanner':
-                    # Ожидаемый формат: {'type': 'sigma_matches', 'log_file': '...', 'matches': [...]}
-                    log_file = finding.get('log_file', 'Unknown')
-                    matches = finding.get('matches', [])
+                    if is_sigma_offline:
+                        # Агрегированный офлайновый формат (chainsaw)
+                        from collections import defaultdict
+                        by_rule = defaultdict(list)
+                        for ev in findings:
+                            key = (ev.get('rule_title','Unknown'), ev.get('rule_id','-'), (ev.get('level') or 'info').upper())
+                            by_rule[key].append(ev)
 
-                    # Покажем первые совпадения (компактно) и сделаем раскрываемый блок
-                    row_id = f"sigma-details-{row_index}"
-                    if matches:
-                        m = matches[0]
-                        rule = m.get('rule', 'Unknown')
-                        level = (m.get('level') or 'info').upper()
-                        line_no = m.get('line_number', '-')
-                        snippet = m.get('line', '')[:120]
+                        # Рендерим одну группу на строку и примеры в раскрытии
+                        for (title, rid, level), items in list(by_rule.items())[:200]:
+                            row_id = f"sigma-offline-{abs(hash(title+str(rid)))}-{row_index}"
+                            examples = items[:5]
+                            html_examples = []
+                            for ex in examples:
+                                try:
+                                    ev_json = json.dumps(ex.get('event', {}), ensure_ascii=False, indent=2)
+                                except Exception:
+                                    ev_json = str(ex.get('event', {}))
+                                html_examples.append(f"<pre class='small' style='white-space:pre-wrap;max-height:220px;overflow:auto;'>{ev_json}</pre>")
+                            html_examples_html = "".join(html_examples)
+
+                            html_content += f"""
+                                <td><small>{title}</small></td>
+                                <td><code>{rid}</code></td>
+                                <td><span class=\"badge bg-info\">{level}</span></td>
+                                <td><span class=\"badge bg-primary\">{len(items)}</span></td>
+                            """
+                            html_content += f"""
+                            </tr>
+                            <tr>
+                                <td colspan=\"4\" class=\"p-0\"> 
+                                    <div class=\"collapsible-content\" id=\"{row_id}\"> 
+                                        <div class=\"p-3\"> 
+                                            {html_examples_html}
+                                        </div>
+                                    </div>
+                                </td>
+                            """
                     else:
-                        rule = '—'
-                        level = 'INFO'
-                        line_no = '-'
-                        snippet = 'No matches'
+                        # Старый формат (pySigma-лог), оставляем для совместимости
+                        log_file = finding.get('log_file', 'Unknown')
+                        matches = finding.get('matches', [])
+                        row_id = f"sigma-details-{row_index}"
+                        if matches:
+                            m = matches[0]
+                            rule = m.get('rule', 'Unknown')
+                            level = (m.get('level') or 'info').upper()
+                            line_no = m.get('line_number', '-')
+                            snippet = m.get('line', '')[:120]
+                        else:
+                            rule = '—'
+                            level = 'INFO'
+                            line_no = '-'
+                            snippet = 'No matches'
 
-                    html_content += f"""
+                        html_content += f"""
                                 <td class=\"text-truncate\" title=\"{log_file}\"><code>{log_file}</code></td>
                                 <td><small>{rule}</small></td>
                                 <td><span class=\"badge bg-info\">{level}</span></td>
@@ -1025,16 +1149,15 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                     <small class=\"text-truncate\" style=\"max-width:280px; display:inline-block;\">{snippet}</small>
                                     <span class=\"badge bg-secondary\" style=\"cursor:pointer\" onclick=\"toggleDetails('{row_id}')\">Show ({len(matches)} hits)</span>
                                 </td>
-                    """
-                    # Добавляем раскрывающийся блок с полным списком совпадений
-                    details_lines = []
-                    for hit in matches[:200]:
-                        details_lines.append(
-                            f"<div class='mb-2'><strong>{hit.get('rule','Unknown')}</strong> [<code>{hit.get('level','info')}</code>] "
-                            f"line <code>{hit.get('line_number','-')}</code><br><small>{hit.get('line','').replace('<','&lt;').replace('>','&gt;')}</small></div>"
-                        )
-                    details_html = "".join(details_lines) if details_lines else "<em>No details</em>"
-                    html_content += f"""
+                        """
+                        details_lines = []
+                        for hit in matches[:200]:
+                            details_lines.append(
+                                f"<div class='mb-2'><strong>{hit.get('rule','Unknown')}</strong> [<code>{hit.get('level','info')}</code>] "
+                                f"line <code>{hit.get('line_number','-')}</code><br><small>{hit.get('line','').replace('<','&lt;').replace('>','&gt;')}</small></div>"
+                            )
+                        details_html = "".join(details_lines) if details_lines else "<em>No details</em>"
+                        html_content += f"""
                             </tr>
                             <tr>
                                 <td colspan=\"5\" class=\"p-0\"> 
@@ -1044,7 +1167,48 @@ def generate_html_report(findings_dict: Dict[str, Any], output_dir: str):
                                         </div>
                                     </div>
                                 </td>
-                    """
+                        """
+
+                elif scanner_name in ['sigma_offline', 'sigma']:
+                    # Агрегированные офлайновые результаты Sigma
+                    # findings: список событий. Сгруппируем выше по шапке, здесь покажем примеры
+                    # Сформируем агрегат по правилам
+                    # Группинг
+                    from collections import defaultdict
+                    by_rule = defaultdict(list)
+                    for ev in findings:
+                        key = (ev.get('rule_title','Unknown'), ev.get('rule_id','-'), ev.get('level','info'))
+                        by_rule[key].append(ev)
+
+                    for (title, rid, level), items in list(by_rule.items())[:50]:
+                        row_id = f"sigma-offline-{abs(hash(title+str(rid)))}-{row_index}"
+                        examples = items[:5]
+                        html_examples = []
+                        for ex in examples:
+                            try:
+                                ev_json = json.dumps(ex.get('event', {}), ensure_ascii=False, indent=2)
+                            except Exception:
+                                ev_json = str(ex.get('event', {}))
+                            html_examples.append(f"<pre class='small' style='white-space:pre-wrap;max-height:220px;overflow:auto;'>{ev_json}</pre>")
+                        html_examples_html = "".join(html_examples)
+
+                        html_content += f"""
+                                <td><small>{title}</small></td>
+                                <td><code>{rid}</code></td>
+                                <td><span class=\"badge bg-info\">{level}</span></td>
+                                <td><span class=\"badge bg-primary\">{len(items)}</span></td>
+                        """
+                        html_content += f"""
+                            </tr>
+                            <tr>
+                                <td colspan=\"4\" class=\"p-0\">
+                                    <div class=\"collapsible-content\" id=\"{row_id}\"> 
+                                        <div class=\"p-3\"> 
+                                            {html_examples_html}
+                                        </div>
+                                    </div>
+                                </td>
+                        """
 
                 else:
                     # Общий случай
@@ -1223,26 +1387,30 @@ def cleanup_json_files(output_dir: str):
     try:
         import glob
         output_path = Path(output_dir)
-
-        # Удаляем все JSON файлы в output директории
+        # Удаляем временные JSON файлы в output директории, но сохраняем итоговые findings и Chainsaw
         json_files = list(output_path.glob("*.json"))
         json_files.extend(list(output_path.glob("**/*.json")))  # Рекурсивно
-
         deleted_count = 0
         for json_file in json_files:
             try:
+                name = json_file.name.lower()
+                # сохраняем все файлы результатов сканеров и Chainsaw
+                if (
+                    name.startswith("findings_")
+                    or name in {"sigma_findings.json", "findings_sigma_scanner.json"}
+                    or ("chainsaw" in [p.lower() for p in json_file.parts] and json_file.suffix.lower() == ".json")
+                ):
+                    continue
                 if json_file.exists():
                     json_file.unlink()
                     deleted_count += 1
                     logging.debug(f"Deleted JSON file: {json_file}")
             except Exception as e:
                 logging.debug(f"Could not delete {json_file}: {e}")
-
         if deleted_count > 0:
             logging.info(f"Cleaned up {deleted_count} JSON files from output directory")
         else:
             logging.info("No JSON files found to clean up")
-
     except Exception as e:
         logging.error(f"Error cleaning up JSON files: {e}")
 
@@ -1300,6 +1468,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Maximum RAM usage (MB) for scanner"
     )
+    # Sigma CLI flags
+    group = parser.add_argument_group("Sigma")
+    group.add_argument("--sigma", action="store_true", help="Enable Sigma scanning")
+    group.add_argument("--sigma-rules", default="rules/sigma", help="Path to Sigma rules (dir or file)")
+    group.add_argument("--sigma-pipeline", default="winlogbeat", help="Sigma pipeline name or YAML path")
+    group.add_argument("--sigma-input", action="append", help="Log file or directory (repeatable)")
+    group.add_argument("--sigma-recursive", action="store_true", help="Recurse into subdirectories")
+    group.add_argument("--sigma-evtx-chunk", type=int, default=1000, help="EVTX->NDJSON chunk size")
+    group.add_argument("--sigma-timeout", type=int, default=300, help="Per-file timeout (sec)")
+    group.add_argument("--sigma-fail-on-parse", action="store_true", help="Fail on parse errors")
+    group.add_argument("--sigma-max-findings", type=int, help="Cap Sigma findings")
+    group.add_argument("--sigma-verbose", action="store_true", help="Verbose Sigma logs")
 
     return parser.parse_args()
 
@@ -1347,7 +1527,208 @@ def main() -> int:
         if args.scanner:
             return run_single_scanner(args.scanner, config, args)
         else:
-            return run_parallel_scanners(config, args)
+            rc = run_parallel_scanners(config, args)
+            # Дополнительный офлайновый Sigma-скан при флаге/включении в ScanManager
+            try:
+                sigma_cli_enabled = False
+                sigma_inputs_cfg = []
+                sigma_rules_cfg = None
+                sigma_pipeline_cfg = None
+                sigma_recursive_cfg = None
+                sigma_evtx_chunk_cfg = None
+                sigma_timeout_cfg = None
+                sigma_max_findings_cfg = None
+                sigma_verbose_cfg = None
+                sigma_fail_on_parse_cfg = None
+
+                if isinstance(config, dict):
+                    # 1) приоритет — scanners.sigma_scanner.enabled
+                    scanners_cfg = config.get('scanners', {}) or {}
+                    sigma_sc_cfg = scanners_cfg.get('sigma_scanner') or {}
+                    sigma_cli_enabled = bool(sigma_sc_cfg.get('enabled', False))
+                    cfg_file = sigma_sc_cfg.get('config_file')
+                    if cfg_file:
+                        try:
+                            import yaml
+                            with open(cfg_file, 'r', encoding='utf-8') as f:
+                                sc_yaml = yaml.safe_load(f) or {}
+                            sigma_rules_cfg = sc_yaml.get('rules') or sc_yaml.get('rules_path')
+                            sigma_pipeline_cfg = sc_yaml.get('pipeline')
+                            sigma_inputs_cfg = sc_yaml.get('inputs') or sc_yaml.get('log_paths') or []
+                            sigma_recursive_cfg = sc_yaml.get('recursive', False)
+                            sigma_evtx_chunk_cfg = sc_yaml.get('evtx_chunk', 1000)
+                            sigma_timeout_cfg = sc_yaml.get('timeout', 300)
+                            sigma_max_findings_cfg = sc_yaml.get('max_findings')
+                            sigma_verbose_cfg = sc_yaml.get('verbose', False)
+                            sigma_fail_on_parse_cfg = sc_yaml.get('fail_on_parse', False)
+                        except Exception as e:
+                            logging.warning(f"Failed to read sigma scanner config {cfg_file}: {e}")
+
+                    # 2) Фолбэк — корневая секция sigma.enabled
+                    if not sigma_cli_enabled:
+                        sigma_cli_enabled = bool((config.get('sigma') or {}).get('enabled', False))
+                        if sigma_cli_enabled:
+                            sc = config.get('sigma') or {}
+                            sigma_rules_cfg = sigma_rules_cfg or sc.get('rules')
+                            sigma_pipeline_cfg = sigma_pipeline_cfg or sc.get('pipeline')
+                            sigma_inputs_cfg = sigma_inputs_cfg or sc.get('inputs') or []
+                            sigma_recursive_cfg = sigma_recursive_cfg if sigma_recursive_cfg is not None else sc.get('recursive', False)
+                            sigma_evtx_chunk_cfg = sigma_evtx_chunk_cfg or sc.get('evtx_chunk', 1000)
+                            sigma_timeout_cfg = sigma_timeout_cfg or sc.get('timeout', 300)
+                            sigma_max_findings_cfg = sigma_max_findings_cfg or sc.get('max_findings')
+                            sigma_verbose_cfg = sigma_verbose_cfg if sigma_verbose_cfg is not None else sc.get('verbose', False)
+                            sigma_fail_on_parse_cfg = sigma_fail_on_parse_cfg if sigma_fail_on_parse_cfg is not None else sc.get('fail_on_parse', False)
+
+                if args.sigma:
+                    sigma_cli_enabled = True
+
+                if sigma_cli_enabled:
+                    # Получаем секцию sigma из конфигурации и перекрываем CLI-параметрами
+                    sigma_inputs = args.sigma_input or sigma_inputs_cfg or []
+                    sigma_rules = args.sigma_rules or sigma_rules_cfg or 'rules/sigma'
+                    sigma_pipeline = args.sigma_pipeline or sigma_pipeline_cfg or 'windows'
+                    sigma_recursive = bool(args.sigma_recursive or (sigma_recursive_cfg or False))
+                    sigma_chunk = int(args.sigma_evtx_chunk or (sigma_evtx_chunk_cfg or 1000))
+                    sigma_timeout = int(args.sigma_timeout or (sigma_timeout_cfg or 300))
+                    sigma_max = args.sigma_max_findings if args.sigma_max_findings is not None else sigma_max_findings_cfg
+                    sigma_verbose = bool(args.sigma_verbose or (sigma_verbose_cfg or False))
+                    sigma_fail_on_parse = bool(args.sigma_fail_on_parse or (sigma_fail_on_parse_cfg or False))
+
+                    os.makedirs(args.output, exist_ok=True)
+                    # Разрешаем путь к правилам относительно каталога текущего файла
+                    rules_path_obj = Path(sigma_rules)
+                    if not rules_path_obj.is_absolute():
+                        rules_path_obj = Path(__file__).resolve().parent / rules_path_obj
+                    sigma_rules_resolved = str(rules_path_obj)
+
+                    # Если указан chainsaw_path в конфиге сканера — используем Chainsaw
+                    chainsaw_path = None
+                    chainsaw_mapping = None
+                    try:
+                        scanners_cfg = (config.get('scanners') or {}) if isinstance(config, dict) else {}
+                        sc = scanners_cfg.get('sigma_scanner') or {}
+                        cfg_file = sc.get('config_file')
+                        if cfg_file:
+                            import yaml
+                            with open(cfg_file, 'r', encoding='utf-8') as f:
+                                sc_yaml = yaml.safe_load(f) or {}
+                            chainsaw_path = sc_yaml.get('chainsaw_path')
+                            chainsaw_mapping = sc_yaml.get('chainsaw_mapping')
+                    except Exception:
+                        chainsaw_path = None
+
+                    if chainsaw_path:
+                        # Опционально: автоэкспорт EVTX согласно конфигу
+                        evtx_export_mode = None
+                        evtx_export_dir = None
+                        try:
+                            scanners_cfg = (config.get('scanners') or {}) if isinstance(config, dict) else {}
+                            sc = scanners_cfg.get('sigma_scanner') or {}
+                            cfg_file = sc.get('config_file')
+                            if cfg_file:
+                                import yaml
+                                with open(cfg_file, 'r', encoding='utf-8') as f:
+                                    sc_yaml = yaml.safe_load(f) or {}
+                                evtx_export_mode = sc_yaml.get('evtx_export')
+                                evtx_export_dir = sc_yaml.get('evtx_export_dir')
+                        except Exception:
+                            pass
+
+                        if evtx_export_mode and evtx_export_mode.lower() != 'off':
+                            from core.evtx_exporter import export_evtx_channels
+                            export_dir = Path(evtx_export_dir) if evtx_export_dir else (Path(args.output) / 'evtx_all')
+                            stats = export_evtx_channels(evtx_export_mode, export_dir)
+                            logging.info(f"EVTX export ({evtx_export_mode}) -> {export_dir}: {stats}")
+                            # Перекроем inputs на экспорт
+                            sigma_inputs = [str(export_dir)]
+                            sigma_recursive = True
+
+                        from core.chainsaw_runner import run_chainsaw_hunt
+                        out_chainsaw = Path(args.output) / 'chainsaw'
+                        evtx_inputs = []
+                        for p in sigma_inputs:
+                            pp = Path(p)
+                            if pp.is_dir():
+                                evtx_inputs.extend(list(pp.glob('*.evtx')))
+                            elif p.lower().endswith('.evtx'):
+                                evtx_inputs.append(pp)
+                        try:
+                            logging.info(f"Chainsaw hunt start: bin={chainsaw_path} rules={rules_path_obj} inputs={len(evtx_inputs)} out={out_chainsaw}")
+                        except Exception:
+                            pass
+                        findings, cs_errors = run_chainsaw_hunt(
+                            chainsaw_path=Path(chainsaw_path),
+                            rules_dir=rules_path_obj,
+                            evtx_inputs=evtx_inputs,
+                            out_dir=out_chainsaw,
+                            timeout_per_file=sigma_timeout,
+                            mapping_dir=Path(chainsaw_mapping) if chainsaw_mapping else None,
+                        )
+                        try:
+                            logging.info(f"Chainsaw hunt done: findings={len(findings)} errors={len(cs_errors)}")
+                        except Exception:
+                            pass
+                        sigma_results = {
+                            "meta": {
+                                "engine": "chainsaw",
+                                "rules_path": str(rules_path_obj),
+                                "files_scanned": len(evtx_inputs),
+                                "errors": cs_errors,
+                            },
+                            "findings": findings,
+                        }
+                    else:
+                        from core.sigma_scanner import SigmaScanner as SigmaCliScanner
+                        sigma = SigmaCliScanner(logging.getLogger("JetCSIRT.Sigma"), Path(args.output), max_cpu=args.max_cpu, max_ram=args.max_ram)
+                        sigma_results = sigma.scan(
+                            inputs=[Path(p) for p in sigma_inputs] if sigma_inputs else [],
+                            recursive=sigma_recursive,
+                            rules=sigma_rules_resolved,
+                            pipeline=sigma_pipeline,
+                            evtx_chunk=sigma_chunk,
+                            timeout=sigma_timeout,
+                            max_findings=sigma_max,
+                            verbose=sigma_verbose,
+                            fail_on_parse=sigma_fail_on_parse,
+                        )
+
+                    # Сохраняем как findings_sigma_scanner.json, чтобы секция называлась единообразно
+                    findings_wrap = {
+                        "findings": sigma_results.get("findings", []),
+                        "artifacts": {},
+                        "meta": sigma_results.get("meta", {})
+                    }
+                    with open(Path(args.output) / 'findings_sigma_scanner.json', 'w', encoding='utf-8') as f:
+                        json.dump(findings_wrap, f, ensure_ascii=False, indent=2)
+
+                    # Также отдельный сырой файл по требованию
+                    with open(Path(args.output) / 'sigma_findings.json', 'w', encoding='utf-8') as f:
+                        json.dump(sigma_results, f, ensure_ascii=False, indent=2)
+                    try:
+                        logging.info("Sigma results saved: output/findings_sigma_scanner.json and output/sigma_findings.json")
+                    except Exception:
+                        pass
+
+                    # Пересобираем HTML-отчёт, включая Sigma как статус и ссылку
+                    try:
+                        out_dir_abs = str(Path(args.output).resolve())
+                    except Exception:
+                        out_dir_abs = args.output
+                    logging.info(
+                        f"Sigma скан завершен успешно. Папка с результатами: {out_dir_abs} "
+                        f"(файлы: sigma_findings.json, findings_sigma_scanner.json)"
+                    )
+                    chainsaw_hint = Path(args.output) / 'chainsaw'
+                    if chainsaw_hint.exists():
+                        try:
+                            logging.info(f"Chainsaw output directory: {str(chainsaw_hint.resolve())}")
+                        except Exception:
+                            logging.info(f"Chainsaw output directory: {chainsaw_hint}")
+                    # Строим HTML-отчет (Sigma появится в сводной таблице и секции)
+                    aggregate_results(args.output)
+            except Exception as e:
+                logging.error(f"Sigma scan failed: {e}")
+            return rc
 
     except KeyboardInterrupt:
         logging.info("Scan interrupted by user")

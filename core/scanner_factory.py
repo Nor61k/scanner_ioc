@@ -11,7 +11,6 @@ from modules.ioc_scanners.ioc_scanner import IOCScanner
 from modules.network_scanners.network_scanner import NetworkScanner
 from modules.system_scanners.system_scanner import SystemScanner
 from modules.registry_scanners.registry_scanner import RegistryScanner
-from modules.log_scanners.sigma_scanner import SigmaScanner
 from core.artifact_collector import ArtifactCollector
 
 class ScannerFactory:
@@ -24,7 +23,7 @@ class ScannerFactory:
         'network_scanner': NetworkScanner,
         'system_scanner': SystemScanner,
         'registry_scanner': RegistryScanner,
-        'sigma_scanner': SigmaScanner,
+        # 'sigma_scanner' удалён: офлайновый sigma-cli запускается из main.py
     }
     
     @classmethod
@@ -52,6 +51,11 @@ class ScannerFactory:
             if not scanner_config.get("enabled", False):
                 continue
                 
+            # Офлайновый Sigma-сканер orchestration выполняется в main.py (Chainsaw)
+            if scanner_name == 'sigma_scanner':
+                logging.debug("Sigma scanner is orchestrated in main.py (Chainsaw). Skipping factory instantiation.")
+                continue
+
             scanner_class = cls._scanner_classes.get(scanner_name)
             if scanner_class is None:
                 logging.warning(f"Unknown scanner type: {scanner_name}")

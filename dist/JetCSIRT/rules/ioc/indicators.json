@@ -1,0 +1,88 @@
+{
+    "file_hash": [
+        {
+            "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "description": "Известный вредоносный файл",
+            "severity": "high",
+            "tags": ["malware", "trojan"]
+        }
+    ],
+    "file_path": [
+        "C:\\Windows\\System32\\suspicious.exe",
+        "C:\\Windows\\Temp\\malware.exe",
+        "C:\\Users\\Public\\backdoor.exe"
+    ],
+    "file_name": [
+        "mimikatz.exe",
+        "psexec.exe",
+        "netcat.exe",
+        "winrar.sfx"
+    ],
+    "registry_key": [
+        "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run\\SuspiciousService",
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce\\Malware",
+        "HKLM\\SYSTEM\\CurrentControlSet\\Services\\BadService"
+    ],
+    "registry_value": [
+        "C:\\Windows\\System32\\malicious.exe",
+        "C:\\ProgramData\\backdoor.dll"
+    ],
+    "ip_address": [
+        {
+            "value": "192.168.1.100",
+            "description": "Известный C2 сервер",
+            "severity": "high",
+            "tags": ["c2", "malware"]
+        },
+        {
+            "value": "10.0.0.99",
+            "description": "Подозрительный узел",
+            "severity": "medium",
+            "tags": ["suspicious"]
+        }
+    ],
+    "domain": [
+        {
+            "value": "malicious.example.com",
+            "description": "Вредоносный домен",
+            "severity": "high",
+            "tags": ["malware", "c2"]
+        },
+        {
+            "value": "suspicious.ru",
+            "description": "Подозрительный домен",
+            "severity": "medium",
+            "tags": ["suspicious"]
+        }
+    ],
+    "url": [
+        "http://malware.example.com/payload.exe",
+        "https://badsite.com/backdoor.php",
+        "ftp://suspicious.net/malware/"
+    ],
+    "email": [
+        "attacker@malicious.com",
+        "bad@example.com",
+        "phishing@suspicious.net"
+    ],
+    "process_name": [
+        "malware.exe",
+        "backdoor.exe",
+        "suspicious_service.exe"
+    ],
+    "process_cmdline": [
+        ".*powershell.exe.*-enc.*",
+        ".*cmd.exe.*/c.*whoami.*",
+        ".*wscript.exe.*vbs.*"
+    ],
+    "service_name": [
+        "BadService",
+        "MalwareService",
+        "SuspiciousDriver"
+    ],
+    "mutex": [
+        "Global\\MalwareMutex",
+        "Global\\BackdoorMutex",
+        "Local\\TrojanMutex"
+    ]
+} 

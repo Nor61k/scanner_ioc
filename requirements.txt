@@ -26,3 +26,7 @@ pysigma-pipeline-sysmon>=0.2.0
 python-magic>=0.4.27
 python-magic-bin; sys_platform == "win32"
 tqdm>=4.66.0
+sigma-cli>=0.7
+python-evtx>=0.6
+xmltodict>=0.13
+jinja2>=3.1
