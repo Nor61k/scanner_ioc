@@ -1,4 +1,0 @@
-scan_services: true
-scan_autoruns: true
-scan_processes: true
-artifacts_dir: "artifacts" 

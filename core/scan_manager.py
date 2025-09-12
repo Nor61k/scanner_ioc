@@ -17,13 +17,6 @@ from modules.system_scanners.system_scanner import SystemScanner
 from modules.ioc_scanners.ioc_scanner import IOCScanner
 from modules.memory_scanners.memory_scanner import MemoryScanner
 
-# Условный импорт sigma_scanner
-try:
-    from modules.log_scanners.sigma_scanner import SigmaScanner
-    SIGMA_AVAILABLE = True
-except ImportError:
-    SIGMA_AVAILABLE = False
-
 class ScanManager:
     """
     Менеджер для управления всеми сканерами
@@ -62,10 +55,6 @@ class ScanManager:
             'ioc_scanner': IOCScanner,
             'memory_scanner': MemoryScanner
         }
-        
-        # Добавляем sigma_scanner только если он доступен
-        if SIGMA_AVAILABLE:
-            scanner_classes['sigma_scanner'] = SigmaScanner
         
         for scanner_name, scanner_config in self.config.get('scanners', {}).items():
             if scanner_config.get('enabled', False) and scanner_name in scanner_classes:

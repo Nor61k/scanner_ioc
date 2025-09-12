@@ -1,8 +1,0 @@
-scan_ports:
-  - 80
-  - 443
-  - 8080
-scan_domains:
-  - "example.com"
-  - "malicious.com"
-artifacts_dir: "artifacts" 

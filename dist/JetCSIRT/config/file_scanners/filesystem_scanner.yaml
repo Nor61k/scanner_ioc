@@ -1,6 +1,0 @@
-scan_paths:
-  - "C:\\"
-  - "D:\\"
-  - "E:\\"
-max_file_size: 10485760  # 10 MB
-artifacts_dir: "artifacts" 

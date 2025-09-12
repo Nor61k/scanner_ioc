@@ -1,3 +1,0 @@
-{"EventID": "808", "Channel": "Microsoft-Windows-PrintService/Admin", "Provider_Name": "Microsoft-Windows-PrintService", "Computer": "DESKTOP-OFJ6N53", "TimeCreated": "2022-02-24 08:26:44.709013+00:00", "RecordID": "1", "Level": "2", "UserID": "S-1-5-18"}
-{"EventID": "808", "Channel": "Microsoft-Windows-PrintService/Admin", "Provider_Name": "Microsoft-Windows-PrintService", "Computer": "DESKTOP-OFJ6N53", "TimeCreated": "2022-02-24 08:26:45.032486+00:00", "RecordID": "2", "Level": "2", "UserID": "S-1-5-18"}
-{"EventID": "808", "Channel": "Microsoft-Windows-PrintService/Admin", "Provider_Name": "Microsoft-Windows-PrintService", "Computer": "DESKTOP-OFJ6N53", "TimeCreated": "2022-02-24 08:26:45.777447+00:00", "RecordID": "3", "Level": "2", "UserID": "S-1-5-18"}

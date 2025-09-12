@@ -1,1 +1,0 @@
-{"EventID": "5016", "Channel": "Microsoft-Windows-SettingSync/Operational", "Provider_Name": "Microsoft-Windows-SettingSync", "Computer": "DESKTOP-OFJ6N53", "TimeCreated": "2022-02-24 09:10:20.238945+00:00", "RecordID": "1", "Level": "2", "UserID": "S-1-5-21-963789628-1060504924-4285088085-1001", "EventData.HRESULT": "2147944650"}
